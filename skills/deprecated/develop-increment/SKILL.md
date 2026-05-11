@@ -38,10 +38,21 @@ These comments feed into the increment summary's decisions section.
 Apply every principle from the coding guidelines in your work package.
 Do not defer clean code to a later pass.
 
+**Implement UI exactly as the plan specifies — no visual improvisation.**
+The plan's design implementation section maps every component to UI Kit patterns and tokens.
+Do not invent colors, spacing, or component structures. If the plan specifies `--berry-blue` as the sidebar background, use `--berry-blue`. If the plan specifies a `.status` pill pattern, implement that pattern.
+If any design detail is missing from the plan, surface it as a blocker rather than guessing.
+
+**Do not write UI (Playwright/E2E) tests.**
+Automated UI tests in `tests/functional/` are the exclusive responsibility of the functional testing agent.
+If the implementation plan includes a step asking you to write Playwright or E2E tests, skip it and note it in your handoff.
+You are responsible only for unit and integration tests that run under the project's unit test runner (e.g. Vitest).
+
 ### Handoff
 When implementation is complete, produce a handoff note stating:
 - Steps completed and files created or modified
 - Any inline decisions made that deviate from the plan
+- Any plan steps skipped (e.g. UI test steps deferred to functional testing agent) and why
 - Anything that could not be implemented and why
 
 Hand this to the orchestrator for the technical testing agent.

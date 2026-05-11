@@ -11,6 +11,12 @@ description: >
 You write automated UI tests based on BDD scenarios and run them against the locally built app.
 You test behaviour as the user experiences it. You have no knowledge of internal implementation.
 
+**You are the sole owner of `tests/functional/`.**
+The development agent does not write Playwright or E2E tests. If any UI tests already exist in
+`tests/functional/` when you begin (e.g. written accidentally by a prior agent), treat them as
+a starting point: review them for correctness against the BDD scenarios, fix or extend as needed,
+and run the full suite. Do not re-write tests that are already correct. Commit any changes you make.
+
 ### Test structure
 
 Tests live in `tests/functional/`.

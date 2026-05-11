@@ -1,115 +1,67 @@
----
-name: increment-start
-description: >
-  Mandatory orchestration skill for starting a new increment. Invoke at the
-  beginning of every increment before generating any sub-agent work packages.
-  Loads the correct context from input files and increment summaries, then
-  produces scoped work packages for each sub-agent.
-invoke: manual
----
+# increment-start
 
-## Increment Start Protocol
+- **Name:** increment-start
+- **Version:** 1.0.0
+- **Purpose:** Open a new increment: refresh local repo, verify dependencies and main-branch hygiene, create branch, draft scope (including code-changes flag and corrective-increment field).
+- **Triggers from:** `session-resume` detecting a phase active and no in-progress increment.
+- **Inputs:**
+  - `/docs/phases/NN-<slug>/roadmap.md` (current phase).
+  - `/docs/business/capabilities/INDEX.md`.
+  - `/docs/increments/INDEX.md`.
+  - Plus meta-skill §1 always-allowed.
+- **Outputs:**
+  - Refreshed local repo (pulled from origin; merged local branches pruned).
+  - New increment branch `increment/NNN-<slug>` from `main`.
+  - `/docs/increments/NNN-<slug>/scope.md` (from `templates/increment-scope.md`) with `code-changes`, optional `@corrects`, declared deps.
+  - Initialized `step-log.md`.
+  - Row added to `/docs/increments/INDEX.md` with status `in-progress`.
+- **Hands off to:** Human at Gate 2, then → `business-analyst` (or `technical-reviewer` directly in doc-only mode).
+- **Inherits:** Meta-skill.
+- **Utility sub-skill:** no.
 
-Execute in order. Do not generate work packages until all steps are complete.
+## Skill-specific halt triggers
 
-### Step 1 — Identify the current increment
+- T-IS-1: Local repo has uncommitted changes.
+- T-IS-2: Pull from origin fails.
+- T-IS-3: Declared dependency on prior increment not in `delivered` status.
+- T-IS-4: Increment number collision.
+- T-IS-5: Roadmap entry references capabilities not in index or in `deprecated` / `withdrawn` status.
+- T-IS-6 (backstop): **Undocumented commits on main since last `delivered` increment.** Normally caught by `session-resume`; this halt fires if `increment-start` is invoked directly. Requires corrective-increment backfill per workflow.md §10 before this skill can advance.
+- T-IS-7: `@corrects:inc-NNN` declared but the named increment is not in `delivered` status, or no CDR/ADR identifying the defect is present.
 
-Read `project-plan.md`. Locate the current increment block.
-Extract:
-- Increment number and name
-- Branch name
-- Requirements in scope (REQ-N list)
-- Architecture sections in scope (§N list)
-- Features in scope (feature names)
-- Design sections in scope (if present)
-- Out-of-scope items
+## Process
 
-### Step 2 — Load project memory
+1. **Refresh local repo.**
+   - Verify clean working tree (halt T-IS-1).
+   - `git checkout main && git pull origin main` (halt T-IS-2).
+   - **Main-commit hygiene check** (T-IS-6 backstop): scan commits on main since last `delivered` increment's merge commit. Any commit not originating from an increment-branch merge is undocumented — halt and require corrective-increment backfill.
+   - Prune local branches merged on origin; report unmerged locals for awareness.
 
-Load all files matching `docs/increment-*-summary.md`, in ascending order.
-These summaries are the sole source of truth for deviations and decisions made in prior increments.
-Input files are not re-read for historical context — only summaries provide that.
+2. **Identify next increment.** From `roadmap.md`, find next `planned` entry. Resolve capability references against `capabilities/INDEX.md` (halt T-IS-5 on bad ref).
 
-If no summaries exist, this is increment 1. Note this and continue.
+3. **Dependency check.** For each `@depends:inc-NNN` declared in roadmap entry, verify `delivered` in `increments/INDEX.md` (halt T-IS-3 otherwise).
 
-### Step 3 — Load scoped input content
+4. **Assign increment number.** Scan `/docs/increments/`, increment highest. Halt T-IS-4 on collision.
 
-Load only the sections referenced in the current increment block:
+5. **Create branch.** `git checkout -b increment/NNN-<slug>` from `main`.
 
-- From `business-analysis.md`: the listed REQ-N requirements and the domain model entities relevant to those requirements.
-- From `technical-architecture.md`: the listed §N sections only. Do not load the full file.
-- From `functional-analysis.md`: the listed feature sections only. Do not load other features.
-- From `design.md`: the listed design sections, if the file exists and design sections are listed. If `design.md` is absent or no design sections are listed, skip entirely.
-- From `coding-guidelines.md`: always load in full. It is small and always relevant.
+6. **Draft `scope.md`** from `templates/increment-scope.md`. Required fields:
+   - In-scope capabilities (with slices).
+   - In-scope scenarios.
+   - Out-of-scope explicit.
+   - Acceptance criteria.
+   - **`code-changes: yes | none`** — `none` triggers doc-only routing (developer + ui-test-engineer skipped per workflow.md §10).
+   - **`@corrects:inc-NNN`** if this is a corrective increment (T-IS-7 validates).
+   - Declared dependencies.
 
-### Step 4 — Load technical documentation
+7. **Initialize `step-log.md`** with metadata header and this skill's step summary.
 
-Load `docs/project-setup.md` if it exists.
-This provides build commands, test commands, environment variables, and repository details.
+8. **Update `/docs/increments/INDEX.md`** — row added, status `in-progress`.
 
-If `project-setup.md` does not exist and this is not increment 1, surface a warning:
-`[WARNING: project-setup.md missing. Build and test steps may fail.]`
+9. **Step summary + halt for Gate 2.**
 
-### Step 5 — Check for technology gaps
+## Notes
 
-Review the technology stack in `technical-architecture.md` against the work to be done this increment.
-If any technology required to complete the increment is not listed in the stack, surface it now:
-`[GAP: {description of missing technology or tooling}]`
-
-Do not proceed past this step until gaps are acknowledged or resolved.
-
-### Step 6 — Check for conflicts with prior summaries
-
-Cross-reference the loaded input content against deviation entries in all increment summaries.
-If any prior deviation affects the current increment's scope, flag it explicitly:
-`[DEVIATION IMPACT: Increment N deviated from §X / REQ-Y in the following way: ... This affects the current increment because ...]`
-
-### Step 7 — Create the feature branch
-
-Run: `git checkout develop && git pull && git checkout -b [branch name from project-plan]`
-
-Surface any git errors before continuing.
-
-### Step 8 — Generate sub-agent work packages
-
-Produce four scoped work packages. Each package contains only what that agent needs.
-
-**Planning agent work package:**
-- Current increment name and number
-- Full list of in-scope requirements (REQ-N with their text)
-- Full list of in-scope architecture sections (§N content)
-- Full list of in-scope feature scenarios
-- Design sections if applicable
-- Deviation impacts from Step 6
-- Coding guidelines
-- Instruction: produce `docs/increment-N-plan.md`
-
-**Development agent work package:**
-- The approved `docs/increment-N-plan.md` (filled in after planning)
-- Coding guidelines
-- In-scope architecture sections
-- project-setup.md content
-- Instruction: implement the plan; commit logical units of work with clear commit messages
-
-**Technical testing agent work package:**
-- The approved `docs/increment-N-plan.md`
-- Coding guidelines (especially testing and coverage requirements)
-- project-setup.md (for build and test commands)
-- Instruction: review compliance, check coverage, flag regression risk, build on approval; escalate to human after 3 failed loops
-
-**Functional testing agent work package:**
-- In-scope feature scenarios (Given/When/Then)
-- project-setup.md (for app start command and UI test command)
-- Path convention: `tests/functional/[feature-name]/`
-- Instruction: write and run UI tests for in-scope features; run full existing test suite for regression
-
-### Step 9 — Confirm readiness
-
-State:
-- Increment N is ready to begin
-- Branch created: [branch name]
-- Work packages prepared for: planner, developer, technical tester, functional tester
-- Any warnings or gaps raised: [list or "none"]
-- Deviation impacts noted: [list or "none"]
-
-Hand the planning work package to the planning agent. Do not proceed to development until the plan exists and has been human-approved.
+- T-IS-6 is the backstop for the hotfix-discipline enforcement, in case `session-resume` was skipped. The two checks are layered intentionally.
+- Doc-only increments (`code-changes: none`) follow the same skill chain through scope.md → review.md → close.md but skip `developer` and `ui-test-engineer`. The orchestrator handles this routing.
+- Corrective increments (`@corrects:inc-NNN`) require explicit defect identification before they can open. The CDR/ADR documenting the defect can be drafted as part of this skill's outputs (TBD-numbered, finalized at increment-close per registering-skill rule).
