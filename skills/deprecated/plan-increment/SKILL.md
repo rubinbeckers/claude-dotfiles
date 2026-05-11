@@ -38,7 +38,14 @@ method, path, input shape, output shape, error cases.
 
 **5. Design implementation** *(omit if no design work this increment)*
 List UI components to be built.
-Reference the relevant design tokens and component patterns.
+For each component or page, specify:
+- Which UI Kit pattern(s) it is composed from (e.g. `.surface` card + `.status` pill + `.tvh` table)
+- Which design tokens apply (colors, typography, spacing, shadows, radii)
+- Any content-specific adaptation of a generic kit pattern (e.g. how a status pill maps to a gate verdict)
+
+Read `specs/claude-design/dashboard/project/UI Kit.html` in full before writing this section.
+Do not invent visual styles. All colors, typography, spacing, and component patterns must come from the UI Kit.
+The UI Kit is generic — it is your job to map its components to the dashboard's domain content.
 
 **6. Test expectations**
 For each BDD scenario in scope, state:
@@ -53,7 +60,7 @@ The increment is done when:
 - Regression suite passes
 
 ### Output
-Write the plan to `increments/increment-N-plan.md`.
+Write the plan to `docs/increment-N-plan.md`.
 State when complete. The plan requires human approval before development begins.
 
 ### Surfacing issues
