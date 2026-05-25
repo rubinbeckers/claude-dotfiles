@@ -52,7 +52,8 @@ Personal dotfiles hosting the skills, subagents, and templates that drive the **
 │
 ├── README.md                    this file
 ├── claude.md                    (empty placeholder)
-└── install-claude.ps1           Windows symlink installer (see below)
+├── install-claude.ps1           Windows symlink installer (see below)
+└── install-claude.sh            macOS / Linux symlink installer
 ```
 
 ## How to use it
@@ -60,17 +61,36 @@ Personal dotfiles hosting the skills, subagents, and templates that drive the **
 ### One-time setup (a new machine)
 
 1. **Clone this repo to `~/.dotfiles`.**
+
+   **Windows (PowerShell):**
    ```powershell
    git clone https://github.com/rubinbeckers/claude-dotfiles.git $env:USERPROFILE\.dotfiles
    ```
 
-2. **Install the symlinks** that expose skills as slash commands and agents as subagents in Claude Code:
+   **macOS / Linux (bash, zsh):**
+   ```bash
+   git clone https://github.com/rubinbeckers/claude-dotfiles.git ~/.dotfiles
+   ```
+
+2. **Install the symlinks** that expose skills as slash commands and agents as subagents in Claude Code. Both scripts do the same thing — pick the one for your OS.
+
+   **Windows (PowerShell):**
    ```powershell
    & $env:USERPROFILE\.dotfiles\install-claude.ps1
    ```
-   This creates:
+   > Requires Developer Mode enabled, or run PowerShell as Administrator. Symlink creation on Windows is gated otherwise.
+
+   **macOS / Linux (bash):**
+   ```bash
+   bash ~/.dotfiles/install-claude.sh
+   ```
+   > No special privileges needed. `ln -s` is available out of the box.
+
+   Either script creates:
    - `~/.claude/commands/<skill>.md` → symlink to `~/.dotfiles/skills/<skill>/SKILL.md` (16 entries)
    - `~/.claude/agents/<agent>.md` → symlink to `~/.dotfiles/agents/<agent>.md` (7 entries)
+
+   Symlinks point at the live files in this repo, so a subsequent `git pull` on the dotfiles propagates without re-running the installer. Re-run only when skills or agents are added / removed / renamed.
 
 3. **Verify access.** When you later run `session-resume` in a project, the orchestrator validates `skill-versions.lock` against the dotfiles tag (default: `workflow-v1.0`); the pin check halts if anything's missing.
 
