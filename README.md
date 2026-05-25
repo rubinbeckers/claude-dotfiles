@@ -1,142 +1,116 @@
-# Agentic SDLC Scaffolding
+# claude-dotfiles — agentic-SDLC workflow v1.0
 
-Complete scaffolding for the agentic SDLC workflow. Three components, each going to a different place:
+Personal dotfiles hosting the skills, subagents, and templates that drive the **agentic-SDLC workflow v1.0** in Claude Code (VS Code extension).
+
+## What's in here
 
 ```
-scaffolding/
-├── project-seed/         → COPIES INTO EACH NEW PROJECT REPO
-│   └── docs/process/
-│       └── workflow.md   # THE source of truth — read first
+.dotfiles/
+├── skills/                      → 16 orchestration + utility skills + _meta
+│   ├── _meta/SKILL.md           cross-cutting rules every skill inherits
+│   ├── session-resume/          canonical session entry point
+│   ├── project-init/            bootstrap a new project (replaces the old
+│   │                              project-seed/ copy mechanism)
+│   ├── project-pause/
+│   ├── phase-start/             phase lifecycle (start → planning → close →
+│   ├── phase-planning/            retrospective → improvement-review)
+│   ├── phase-close/
+│   ├── phase-retrospective/
+│   ├── increment-start/         increment lifecycle (start → planning →
+│   ├── increment-planning/        backlog-loop → close)
+│   ├── increment-close/
+│   ├── backlog-loop/            per-backlog-item iteration (develop / test /
+│   │                              review delegation + verdict handling)
+│   ├── feedback-triage/
+│   ├── improvement-review/      Gate 3 — human approval of skill diffs +
+│   │                              standards updates
+│   ├── workflow-curator/        utility — synthesizes observation patterns
+│   ├── doc-consolidator/        utility — proposes permanent-doc deltas
+│   └── doc-integrity/           utility — validates ref + supersession +
+│                                  status integrity at close gates
 │
-├── skills/               → LIVES IN YOUR DOTFILES REPO
-│   ├── _meta/SKILL.md    # shared behavior all skills inherit
-│   └── <skill>/SKILL.md  # 15 skills (see inventory below)
+├── agents/                      → 7 subagent definitions (NEW in v1.0; old
+│                                  workflow had no agent layer)
+│   ├── phase-business-analysis.md
+│   ├── phase-technical-architecture.md
+│   ├── increment-functional-analysis.md
+│   ├── increment-technical-analysis.md
+│   ├── backlog-develop.md       (TL implementation)
+│   ├── backlog-test.md          (isolated test author)
+│   └── backlog-review.md        (verdict + standards observations)
 │
-└── templates/            → LIVES ALONGSIDE THE SKILLS (in dotfiles)
-    └── *.md / *.feature  # ~22 document templates the skills use
+├── templates/                   → 17 doc templates the skills consume
+│   ├── INDEX.md                 project state record schema
+│   ├── capability.md / aggregate.md / feature.md / flow.md
+│   ├── decision-records.md      (CDR / DDR / FDR / ADR — unified spec)
+│   ├── increment-scope.md / phase-plan.md / phase-debt.md
+│   ├── backlog-item.md / feedback-inbox.md / observations.md
+│   ├── tag-vocabulary.md / subtree-INDEX.md / minor-templates.md
+│   └── standards-observations.md + workflow-observations.md
+│                                (deprecated redirects — kept so legacy
+│                                 transient logs still find their home)
+│
+├── README.md                    this file
+├── claude.md                    (empty placeholder)
+└── install-claude.ps1           Windows symlink installer (see below)
 ```
 
 ## How to use it
 
-### One-time setup
+### One-time setup (a new machine)
 
-1. **Put the skills in your dotfiles.** Copy `scaffolding/skills/` to wherever your dotfiles host them. The 15 skill folders + `_meta/` need to be accessible to the orchestrating agent.
-2. **Put the templates with the skills.** Copy `scaffolding/templates/` to the same parent location. The skills reference templates by relative path (e.g., `templates/capability.md`).
-3. **Verify access.** When you later run `project-init`, it checks the dotfiles location is reachable and validates the pinned skill versions per `workflow.md` §15.
+1. **Clone this repo to `~/.dotfiles`.**
+   ```powershell
+   git clone https://github.com/rubinbeckers/claude-dotfiles.git $env:USERPROFILE\.dotfiles
+   ```
+
+2. **Install the symlinks** that expose skills as slash commands and agents as subagents in Claude Code:
+   ```powershell
+   & $env:USERPROFILE\.dotfiles\install-claude.ps1
+   ```
+   This creates:
+   - `~/.claude/commands/<skill>.md` → symlink to `~/.dotfiles/skills/<skill>/SKILL.md` (16 entries)
+   - `~/.claude/agents/<agent>.md` → symlink to `~/.dotfiles/agents/<agent>.md` (7 entries)
+
+3. **Verify access.** When you later run `session-resume` in a project, the orchestrator validates `skill-versions.lock` against the dotfiles tag (default: `workflow-v1.0`); the pin check halts if anything's missing.
 
 ### Starting a new project
 
-1. Tell the orchestrating agent: *"Initialize a new project at `<path>` using `project-init`."*
-2. `project-init` scaffolds the repo, sets up CI (unit + UI + SCA + secret scanner), creates the doc structure, seeds `workflow.md`, `tag-vocabulary.md`, baseline standards stubs, verifies skills access.
-3. Place raw input (anything — Word docs, notes, transcripts, decks) into `/docs/phases/01-<phase-slug>/intake/raw/`.
-4. Tell the agent: *"Run `session-resume`."*
+In a new repo with no `INDEX.md`, no `docs/`, and no `skill-versions.lock`:
 
-From there, the workflow runs. Your role is to approve gates and answer the halts the non-assumption principle surfaces.
+1. In Claude Code, open the project. The harness auto-loads the workflow on session start.
+2. Invoke `project-init`. It scaffolds:
+   - `workflow.md`, `agentic-sdlc-principles.md`, `doc-structure.md` at project root
+   - `INDEX.md` (with the project's slug, branch config, first phase placeholder)
+   - `skill-versions.lock` pinned to the current dotfiles tag
+   - `docs/permanent/` + `docs/transient/` skeleton per `doc-structure.md` §2.2 / §3.2
+3. Provide raw input for the first phase. `project-init` then routes to `phase-start`.
 
-### Starting a coding session on an existing project
+### Resuming work
 
-Just say: *"Run `session-resume`."* That skill is the workflow's entry point — it reconciles state (git, indices, pinned versions, undocumented main commits) and routes to the right next step.
+Any subsequent session, anywhere in the lifecycle:
 
-### Pausing a project
+> *"resume"* — or *"continue"* — or any unspecified opening.
 
-Tell the agent: *"Run `project-pause`."* It captures a clean paused state with a summary. Next session's `session-resume` will detect and surface the pause; clearing it (delete `pause-summary.md`) resumes normally.
+`session-resume` reads `workflow.md`, validates pins, scans git on the project's `operating_branch`, and routes to the correct next skill (per its routing table in `skills/session-resume/SKILL.md`).
 
-## The closed loop
+## Branch model
 
-```
-session-resume (every session start)
-   ↓ (routes to)
-[project-init | phase-intake | increment-start | resume | phase-close | wait]
+| Branch / tag | What it is |
+|---|---|
+| `main` | The canonical workflow-v1.0 install. Default branch. |
+| `pre-v1.0-archive` | Snapshot of the prior (custom) workflow at the v1.0 migration point. Reference only — not for use. |
+| tag `workflow-v1.0` | Stable pin target. `skill-versions.lock` in projects references this tag. |
+| tag `pre-v1.0-migration-2026-05-25` | Local pre-migration snapshot. |
+| tag `pre-v1.0-main-2026-05-25` | Pre-v1.0 origin/main snapshot (includes the old `intake-prep` skill orphaned by the force-push at v1.0 install). |
 
-→ phase-intake → increment-start → business-analyst →
-  functional-specifier → implementation-planner → developer →
-  ui-test-engineer → technical-reviewer → increment-close →
-  (next increment OR phase-close → skill-curator → next phase)
-```
+## Migrating from a prior workflow
 
-Each skill explicitly declares inputs, outputs, and handover target. The orchestrator follows the chain. You see it through six required human gates plus any halts the non-assumption principle surfaces.
+If you have a project running an older custom workflow (skills like `business-analyst`, `developer`, `functional-specifier`, `implementation-planner`, `technical-reviewer`, `ui-test-engineer`, `phase-intake`, `skill-curator`), the migration to v1.0 is a one-shot agent-driven operation. The reference run is documented in the `lcm-agile-assessment-dashboard` project's `migration-2026-05-v1.0/` audit trail.
 
-## Skill inventory (15 + meta)
+## References
 
-| Skill | When it runs |
-|-------|--------------|
-| `_meta` | Inherited by all (not invoked directly) |
-| `session-resume` | Every session start — routes to the right next step |
-| `project-init` | Project bootstrap |
-| `phase-intake` | Each new phase (or amendment mode mid-phase) |
-| `increment-start` | Each new increment |
-| `business-analyst` | After increment scope approval |
-| `functional-specifier` | After business refinement |
-| `implementation-planner` | After BDD approval |
-| `developer` | After plan approval |
-| `ui-test-engineer` | After development |
-| `technical-reviewer` | After UI tests |
-| `increment-close` | After review approval |
-| `phase-close` | After last increment of a phase merges |
-| `project-pause` | Manual — captures paused state |
-| `skill-curator` | At phase close (or manually) |
-| `doc-integrity` | Utility sub-skill, invoked by `increment-close` and `phase-close` |
-
-## The six required human gates
-
-| # | Where | What you decide |
-|---|-------|-----------------|
-| 0 | After `phase-intake` Pass 1 | Itemized intake-review approvals (gaps, defaults, area tags) |
-| 1 | After `phase-intake` Pass 2 | Phase setup outputs (capabilities, direction, threat answers) |
-| 2 | After `increment-start` | Increment scope |
-| 3 | After `functional-specifier` | BDD scenarios |
-| 4 | After `implementation-planner` | Implementation plan (with plain-language ADR digest) |
-| 5 | After `technical-reviewer` approval | PR merge — checklist separates *verified mechanically* from *needs human confirmation* |
-
-## Security posture (built in, not bolted on)
-
-Security is built into specific artifacts and checks across the workflow rather than into a dedicated security-reviewer skill (which without expertise would produce false confidence). See `workflow.md` §16 for full details.
-
-- **Capability spec** has discrete fields: `Data classification`, `Authn required`, `Authz model`, `Threat considerations` (questions for the human when classification > public or trust boundary crossed).
-- **Aggregate spec** has `Data classification`.
-- **`@security-critical` tag** derived deterministically from data classification ≥ confidential.
-- **Testing standards** require 100% line + branch coverage on `@security-critical` paths' input-validation and error paths.
-- **Coding standards** seed with secrets-handling and logging-hygiene baselines.
-- **CI defaults** include SCA + secret scanner alongside tests.
-- **ADRs introducing dependencies** include `Supply chain notes` referencing SCA output.
-- **Technical-reviewer checklist** covers secrets grep, logging hygiene, input validation at trust boundaries, SCA results, AC coverage, dep-trace.
-- **Gate 5** explicitly separates mechanical checks from human confirmations.
-
-**Floor, not ceiling.** Defensible for solo agentic SDLC on pre-production or non-public-facing code. Anything landing in front of real users with real data should have an external security pass before go-live. Known v1 limitations: skills supply chain (signing/provenance), expert threat modeling depth, operational security.
-
-## Design principles in one paragraph
-
-The workflow treats context as a budget. Skills load only what their declared inputs and the plan-manifest authorize. Every claim is grounded in a cited source; ungrounded claims are halt triggers. Decisions are append-only — superseded, withdrawn (terminal), or rejected, never edited. Every artifact carries tags from a controlled vocabulary; loaders filter by tag. Six required gates plus halt-surfaces keep humans in the loop on intent, not on minutiae. Security, supply chain, and standards are mechanically checked where they can be and explicitly surfaced for human judgment where they can't — never mixed.
-
-## Files
-
-```
-scaffolding/
-├── README.md (this file)
-├── project-seed/
-│   └── docs/process/workflow.md
-├── skills/
-│   ├── _meta/SKILL.md
-│   ├── session-resume/SKILL.md
-│   ├── project-init/SKILL.md
-│   ├── phase-intake/SKILL.md
-│   ├── increment-start/SKILL.md
-│   ├── business-analyst/SKILL.md
-│   ├── functional-specifier/SKILL.md
-│   ├── implementation-planner/SKILL.md
-│   ├── developer/SKILL.md
-│   ├── ui-test-engineer/SKILL.md
-│   ├── technical-reviewer/SKILL.md
-│   ├── increment-close/SKILL.md
-│   ├── phase-close/SKILL.md
-│   ├── project-pause/SKILL.md
-│   ├── skill-curator/SKILL.md
-│   └── doc-integrity/SKILL.md
-└── templates/
-    ├── (artifact templates) aggregate, capability, component, decision-record, feature, flow, ui-spec
-    ├── (phase) phase-intake-review, phase-scope, phase-direction, phase-roadmap, phase-retrospective
-    ├── (increment) increment-scope, increment-plan, increment-review, increment-changelog, increment-template
-    ├── (process) tag-vocabulary-seed, sequential-increments, standards-observations, pause-summary
-    ├── (standards stubs) coding-standards-stub, testing-standards-stub, naming-conventions-stub
-    └── (utility) index
-```
+- The v1.0 workflow contract: `workflow.md` (at any v1.0-using project's root)
+- The principles this workflow instantiates: `agentic-sdlc-principles.md`
+- Documentation layout: `doc-structure.md`
+- Cross-cutting skill rules: `skills/_meta/SKILL.md`
