@@ -1,67 +1,96 @@
+---
+name: project-pause
+description: Pause the project cleanly mid-flow. Records a paused state in INDEX with a one-page summary so a future session can resume without confusion. Use when work needs to stop for an extended period without abandoning the project.
+---
+
 # project-pause
 
-- **Name:** project-pause
-- **Version:** 1.0.0
-- **Purpose:** Capture a clean paused state for the project so future `session-resume` invocations can pick up unambiguously without inferring intent.
-- **Triggers from:** Manual invocation when the human wants to pause work explicitly (long break, switching to another project, end of engagement).
-- **Inputs:**
-  - All `INDEX.md` files (for current statuses).
-  - Last `step-log.md` if mid-increment.
-  - `/docs/phases/<active>/roadmap.md` if a phase is active.
-  - Plus meta-skill §1 always-allowed.
-- **Outputs:**
-  - `/docs/process/pause-summary.md` — captures: pause timestamp, what was in progress, what was the next planned step, any open items / surfaced halts, notes for resumption.
-  - Statuses left as-is in INDEX files (pause is a project-level annotation, not a status change on artifacts).
-- **Hands off to:** Human (project now paused; next session's `session-resume` will detect and surface).
-- **Inherits:** Meta-skill.
-- **Utility sub-skill:** no.
+Clean pause. Records the current state in INDEX so that a later `session-resume` can pick up exactly where things left off, even months later. Does not abandon work; does not modify in-flight artifacts.
 
-## Skill-specific halt triggers
+Runs in the main chat. Does not delegate.
 
-- T-PP-1: `pause-summary.md` already exists with a recent timestamp (within the last hour) — likely accidental re-invocation. Surface for confirmation.
-- T-PP-2: Working tree is dirty with uncommitted changes — surface, ask whether to commit, stash, or proceed without.
+## Inputs
 
-## Process
+- `INDEX.md`
+- All active transient docs in the current phase / increment workspace
+- Always-allowed set (`_meta` §1)
 
-1. **Snapshot state.**
-   - Current phase and status.
-   - Current increment (if any) and status.
-   - Last skill invoked, last gate hit, last halt (if any) — from most recent step-log.
-   - Working tree status (clean / dirty).
-   - Branch state.
+## Outputs
 
-2. **Identify next planned step** by simulating `session-resume`'s routing logic. Record this in the summary so the human knows what would happen on resume.
+- `INDEX.md` updated with `status: paused` on the active phase/increment
+- `docs/transient/phases/<phase-slug>/pause-summary.md` — one-page snapshot
+- Any in-flight subagent work is *not* paused mid-flight; the skill waits for the current subagent to return, or halts if a subagent is active
 
-3. **Collect open items** — any `awaiting approval` step summaries, any unresolved halts, any decision records in TBD state.
+## Steps
 
-4. **Generate `pause-summary.md`** from `templates/pause-summary.md`. Sections:
-   - Pause timestamp.
-   - Phase and increment context.
-   - Last step.
-   - Open items (with paths).
-   - Working-tree state.
-   - Next planned step (per simulated routing).
-   - Notes (free-form, optional human-supplied context).
+### Step 1 — Verify no active subagent
 
-5. **Commit pause-summary** to current branch (or main if no branch): `chore(pause): record project pause state`.
+If the orchestrator has an in-flight Task call, halt with `T-PP-1`. Pausing during a subagent run leaves the subagent's return unhandled. The human must wait for subagent return, or interrupt manually before invoking pause.
 
-6. **Step summary.**
+### Step 2 — Snapshot active state
 
-   ```
-   ## ⏸️ Project paused — [ISO timestamp]
-   - Phase: <NN-slug> [<status>]
-   - Increment: <NNN-slug | none>
-   - Last step: <skill> @ <timestamp>
-   - Open items: <count>
-   - Working tree: <clean | dirty with note>
-   - Next on resume: <route>
-   - Summary at: /docs/process/pause-summary.md
-   ```
+Read INDEX for active phase and active increment. Read the active transient workspace (phase or increment level).
 
-## Notes
+Produce `pause-summary.md`:
 
-- Pause is a soft state. Nothing technical prevents continuing — the artifact just makes the pause visible to future `session-resume`.
-- On resume, `session-resume` detects `pause-summary.md`, surfaces it, and asks the human whether to clear it (and proceed with whatever the original next step was) or stay paused.
-- Clearing the pause is done by deleting or renaming `pause-summary.md` — there's no separate "unpause" skill. The next session's `session-resume` notices it's gone and routes normally.
-- Pause summary captures intent for the future-self / future-orchestrator. It's not auto-generated state that can be reconstructed from git — it's a narrative artifact.
-- If the project is going to be paused for a long time, the human may also want to pin all skill versions explicitly in `workflow.md` §15 (rather than relying on dotfiles availability later). That's a separate decision, not enforced here.
+```
+# Pause summary
+Paused: <ISO timestamp>
+Active phase: <slug> (status: <status>)
+Active increment: <slug or "none"> (status: <status>)
+
+## Where we are
+<2-3 sentences: what was just completed, what was about to happen>
+
+## Outstanding halts
+<list of unresolved halts in workflow-observations.md, or "none">
+
+## Backlog state (if active increment)
+- Items delivered: <list>
+- Item in progress: <slug or "none">
+- Items pending: <list>
+
+## Pending feedback inbox entries
+<list of entries not yet triaged, or "none">
+
+## To resume
+Run session-resume. It will route to: <expected next skill>
+```
+
+### Step 3 — Update INDEX
+
+Append a `status: paused` flag to the active phase and active increment entries in INDEX. Add a `paused_at: <timestamp>` field. Add `pause_summary: <path>` reference.
+
+### Step 4 — Commit
+
+`git commit` on `develop` (or the active increment branch if work is on a branch):
+
+```
+chore: project-pause at <phase>/<increment>
+```
+
+### Step 5 — Status summary
+
+Emit to human:
+
+```
+═══════════════════════════════════════════════
+Project paused.
+Active phase: <slug>
+Active increment: <slug or "none">
+Pause summary: docs/transient/phases/<phase-slug>/pause-summary.md
+To resume: invoke session-resume at any later session.
+═══════════════════════════════════════════════
+```
+
+## Halt triggers
+
+| Trigger ID | Condition | Route-to |
+| --- | --- | --- |
+| T-PP-1 | Subagent currently in flight | human (wait for return) |
+| T-PP-2 | No active phase to pause (project already idle) | human (no-op) |
+| T-PP-3 | INDEX malformed | human |
+
+## Resuming
+
+`session-resume` recognises `status: paused` in INDEX and routes the same way it would for the recorded `last_action`. The pause-summary.md is read by the human (not the skill) to refresh context. The workflow itself reads from INDEX and proceeds.

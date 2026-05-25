@@ -1,86 +1,132 @@
+---
+name: phase-close
+description: Close a phase. Runs doc-consolidation and integrity sweep, surfaces proposed permanent-doc deltas for human approval, then hands off to phase-retrospective. Invoked by session-resume after the last increment of the phase delivers.
+---
+
 # phase-close
 
-- **Name:** phase-close
-- **Version:** 1.0.0
-- **Purpose:** Close a phase after its final increment is merged: full doc-integrity sweep (utility carve-out), consolidate increment step-logs into phase log, archive ephemera, write retrospective including workflow-defects and standards-adequacy synthesis, lock the phase, trigger curator.
-- **Triggers from:** `session-resume` detecting last increment of phase is `delivered` and no more roadmap entries planned (or manual invocation).
-- **Inputs:**
-  - Current phase folder `/docs/phases/NN-<slug>/`.
-  - All increment folders belonging to this phase (resolved via `@phase-NN` in `increments/INDEX.md`).
-  - `/docs/phases/NN-<slug>/standards-observations.md`.
-  - `/docs/process/learnings/*.md`.
-  - Plus meta-skill §1 always-allowed.
-- **Outputs:**
-  - Invokes `doc-integrity` (utility sub-skill, meta-skill §10) with scope = full project.
-  - `/docs/phases/NN-<slug>/phase-log.md` — consolidated step-log narrative across all increments.
-  - Archived (or deleted, per config) increment `step-log.md` files. Default: archive to `/docs/phases/NN-<slug>/archived-step-logs/<inc-id>.md`. Config `cleanup_step_logs: true` deletes instead.
-  - `/docs/phases/NN-<slug>/retrospective.md` (from `templates/phase-retrospective.md`) including:
-    - Delivered vs. planned scope.
-    - Key decisions made.
-    - **Workflow-defects synthesis** — patterns from `learnings/*.md` files this phase that suggest skill or workflow issues.
-    - **Standards-adequacy synthesis** — synthesizing `standards-observations.md` into proposed standards updates (each is a candidate change to `coding-standards.md`, `testing-standards.md`, or `naming-conventions.md`, surfaced for human approval).
-    - Direction for next phase (if known).
-  - Updated `/docs/phases/INDEX.md` — this phase → `completed`.
-  - Trigger sent to `skill-curator`.
-- **Hands off to:** `skill-curator` (asynchronous). Phase is now **locked** — see notes.
-- **Inherits:** Meta-skill.
-- **Utility sub-skill:** no.
+Closes a phase. Consolidates transient docs into permanent ones (via `doc-consolidator`), runs a full `doc-integrity` sweep, surfaces proposed permanent-doc deltas, then advances to `phase-retrospective`.
 
-## Skill-specific halt triggers
+Runs as an orchestration skill in the main chat. Invokes utility sub-skills per the carve-out in `_meta` §6.
 
-- T-PC-1: Full `doc-integrity` sweep reports unresolvable issues.
-- T-PC-2: An increment in this phase not in `delivered` or `abandoned` status (can't close with open increments).
-- T-PC-3: Roadmap has unaddressed `planned` entries (must be explicitly deferred via CDR or moved out of scope).
+## Inputs
 
-## Process
+- INDEX (with all increments of this phase marked `closed`)
+- All transient docs under `docs/transient/phases/<phase-slug>/`
+- All permanent docs (read-only at this step; deltas are *proposed*, applied at gate)
+- Always-allowed set (`_meta` §1)
 
-1. **Verify phase completion.**
-   - Every increment tagged for this phase is `delivered` or `abandoned`. Halt T-PC-2.
-   - Every roadmap entry is `delivered`, `deferred-with-CDR`, or `out-of-scope`. Halt T-PC-3.
+## Outputs
 
-2. **Invoke `doc-integrity` (utility carve-out, full sweep).** Cite meta-skill §10. Checks broader than per-increment: full cross-reference resolution, INDEX consistency, tag vocabulary, glossary completeness (full sweep), ADR coherence (orphan proposed, bidirectional supersession, withdrawn-reference checks), capability ↔ feature alignment, component ↔ ADR alignment. Surface unresolvable issues (halt T-PC-1).
+- Proposed permanent-doc deltas in `docs/transient/phases/<phase-slug>/consolidation-proposed.md`
+- `doc-integrity` report at `docs/transient/phases/<phase-slug>/integrity-report.md`
+- INDEX updated: phase status flips to `closing`
 
-3. **Consolidate phase log.** Create `phase-log.md` summarizing each increment in narrative form (scope, decisions, capabilities delivered, key challenges from step-log halts, retrospective notes). Goal: someone reading only this can reconstruct the phase without individual step-logs.
+## Steps
 
-4. **Archive (or delete) increment step-logs.** Default: move each `step-log.md` to `/docs/phases/NN-<slug>/archived-step-logs/<inc-id>.md`. The other increment files (`scope.md`, `plan.md`, `changelog.md`, `review.md`) are preserved — they're durable records.
+### Step 1 — Verify pre-conditions
 
-5. **Synthesize workflow-defects.** Read each `/docs/process/learnings/<skill>.md` file. For each entry tagged with this phase, surface in retrospective:
-   - Patterns observed (recurring halts, gaps in skills).
-   - Skill ambiguities encountered.
-   - Process friction.
-   This feeds `skill-curator`.
+- All increments listed in the phase plan have status `closed` in INDEX.
+- No `awaiting-merge` increments remain. If any do, halt with `T-PC-1`.
+- No unresolved halts in `workflow-observations.md`. If any, halt with `T-PC-2`.
 
-6. **Synthesize standards-adequacy.** Read `/docs/phases/NN-<slug>/standards-observations.md`. Group by category (coding / testing / naming / security / other). For each cluster, propose a candidate standards update (specific text addition / change to `coding-standards.md`, `testing-standards.md`, etc.). Surface for human approval in the retrospective; approved updates become a doc-only increment in the next phase (or current phase if not yet locked at this exact moment — see lock-in note).
+### Step 2 — Invoke doc-consolidator
 
-7. **Write `retrospective.md`** with required sections (delivered vs. planned, decisions, workflow-defects, standards-adequacy, next-phase direction, metrics).
+Invocation cited under utility-sub-skill carve-out (`_meta` §6):
 
-8. **Update `phases/INDEX.md`** — this phase → `completed` with date.
+```
+Invoking utility sub-skill doc-consolidator (scope: phase <phase-slug>).
+```
 
-9. **Trigger `skill-curator`.** Pass project learnings paths, retrospective, phase log. Curator runs asynchronously.
+`doc-consolidator` walks all transient docs in this phase's workspace, reads their `feeds-into:` headers, and produces a proposed-deltas document listing every change to permanent docs. The deltas are *not* applied yet — they go to `consolidation-proposed.md` for human review at the close gate.
 
-10. **Step summary:**
+Surface the consolidator's return summary.
 
-    ```
-    ## ✅ Phase NN-<slug> closed
-    - Increments delivered: <count>
-    - Doc integrity: clean (full sweep)
-    - Phase log written
-    - Retrospective written (workflow-defects: <N>, standards-adequacy: <M>)
-    - Step-logs archived
-    - Skill curator triggered
-    
-    ## 🔒 Phase locked
-    - Subsequent corrections to this phase's outputs route through corrective increments (workflow.md §10).
-    - `phase-intake` amendment mode is no longer available for this phase.
-    
-    ## 🔔 Next
-    - To start next phase: place raw input in /docs/phases/<next>/intake/raw/ and run `session-resume`.
-    - To pause: no action needed. Run `project-pause` for explicit pause state.
-    ```
+### Step 3 — Invoke doc-integrity (full sweep)
 
-## Notes
+Invocation cited under utility-sub-skill carve-out:
 
-- **Phase lock-in:** once this skill completes, the phase becomes immutable. The amendment mode in `phase-intake` is no longer available for this phase. Corrections to its outputs route through corrective increments in the next phase. This is enforced by `phase-intake` itself (halt T-PI-5 in `phase-intake`).
-- Archive-vs-delete for step-logs: default archive (zero risk of losing context); cleanup is opt-in via config.
-- Skill version bumps are natural at phase-close. Retrospective's workflow-defects + curator output may motivate updating pinned versions in `workflow.md` §15 before the next phase begins.
-- Phase-close runs `doc-integrity` in full-sweep mode — broader than the per-increment scope. Catches cumulative drift the per-increment checks can't see.
+```
+Invoking utility sub-skill doc-integrity (scope: full).
+```
+
+`doc-integrity` performs a full sweep at phase close:
+- Reference validation: every `Grounded in:` source exists, is in scope, and is current.
+- Supersession bidirectionality: every `superseded-by:` has matching `supersedes:` and vice versa.
+- Decision-record status consistency: no `proposed` records remain that should have been numbered or withdrawn.
+- TBD-ID resolution: no `TBD-*` placeholders remain in permanent docs.
+- Withdrawn/deprecated reference check: no accepted record references a withdrawn or deprecated one.
+
+Surface the integrity report.
+
+### Step 4 — Surface proposed deltas via structured approval prompt
+
+Emit the phase-close approval prompt per `_meta` §13.3:
+
+```
+═══════════════════════════════════════════════
+APPROVAL REQUIRED — Phase-close consolidation
+Active scope: <phase-slug>
+
+Summary of changes proposed:
+  <2–3 sentence summary: how many doc-deltas, integrity verdict, carry-forward queue size>
+
+Files for review:
+  - docs/transient/phases/<phase-slug>/consolidation-proposed.md — <N> proposed deltas
+  - docs/transient/phases/<phase-slug>/integrity-report.md — integrity findings
+
+To approve all deltas: reply "approve".
+To approve selectively: reply "approve: <list>".
+To reject some: reply "reject: <list with reasons>".
+To request changes: reply "changes: <list>".
+═══════════════════════════════════════════════
+```
+
+This is *not* a separate human gate (Gate 3 is improvement-review, after retrospective). It's the consolidation review inside `phase-close`.
+
+### Step 5 — Apply approved deltas
+
+When the human returns:
+
+- For each approved delta in `consolidation-proposed.md`: apply to the relevant permanent doc. The skill makes the edit; the human's role was approving the delta, not making the edit.
+- For each rejected delta: log in INDEX with `delta_rejected:` reason; the source transient content is *not* pruned yet (rejected content survives until retrospective resolves it).
+- For integrity findings flagged `critical`: must be resolved before retrospective. Critical findings typically route to a corrective increment per `workflow.md` §9.
+
+### Step 6 — Prune transient content (selective)
+
+For every transient doc in this phase's workspace:
+- If all its `feeds-into:` declarations have been processed (either applied or explicitly deferred), the doc is eligible for pruning.
+- Pruning happens *after* retrospective and improvement-review, not here. This step just *marks* transient docs as eligible.
+
+Mark in INDEX: `transient_pruning_eligible: <list of paths>`.
+
+### Step 7 — Advance to phase-retrospective
+
+Status line:
+
+```
+Phase close consolidation complete. Advancing to phase-retrospective.
+```
+
+Update INDEX: phase status flips to `retrospective`. Invoke `phase-retrospective`.
+
+## Halt triggers
+
+| Trigger ID | Condition | Route-to |
+| --- | --- | --- |
+| T-PC-1 | Increment in `awaiting-merge` state | human (merge or abandon increment first) |
+| T-PC-2 | Unresolved halt in workflow-observations | resolve halt first, then re-invoke |
+| T-PC-3 | doc-integrity reports `critical` finding requiring corrective increment | open corrective increment per workflow.md §9 |
+| T-PC-4 | Human rejects all deltas (substantive consolidation disagreement) | re-run prior increment(s) consolidation or open corrective increment |
+| T-PC-5 | doc-consolidator halts (e.g., feeds-into target doc doesn't exist) | resolve, then re-invoke |
+
+## Observations
+
+Surface as `routine`:
+- Transient docs that consistently produce no consolidation deltas (signal: the doc may be permanent-track candidate, or it's working scaffold that doesn't need feeds-into).
+- High volume of rejected deltas (signal: doc-consolidator's synthesis quality should be reviewed).
+- Integrity findings clustered around a specific doc type (signal: that template's discipline needs reinforcement).
+
+Surface as `critical`:
+- Integrity findings indicating bidirectional supersession failures (workflow invariant violated).
+- TBD-ID found in a permanent doc that's not from the just-closed increment (numbering rule violation across increments).

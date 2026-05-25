@@ -1,128 +1,201 @@
+---
+name: doc-integrity
+description: Utility sub-skill. Validates documentation integrity: references resolve, supersession is bidirectional, statuses are consistent, TBD-* IDs are resolved, withdrawn/deprecated records are not referenced. May only be invoked by close skills (phase-close, increment-close) per _meta §6 utility-sub-skill carve-out.
+---
+
 # doc-integrity
 
-- **Name:** doc-integrity
-- **Version:** 1.0.0
-- **Purpose:** Validate doc structure consistency: indices, cross-references, tags, glossary, decision-record supersession (forward + back), `Grounded in:` provenance, withdrawn-reference checks, corrective-increment back-references.
-- **Triggers from:** `increment-close` (per-increment scope) and `phase-close` (full sweep) via the utility sub-skill carve-out (meta-skill §10); or manual.
-- **Utility sub-skill:** **yes.** This is the currently-only declared utility sub-skill. Invoking skills must cite this carve-out explicitly in their invocation.
-- **Inputs:** Determined by scope:
-  - Per-increment scope: changed-doc set from current increment.
-  - Full sweep: all `/docs/**/*.md`, `/features/**/*.feature`, `/design/**/*.md`.
-  - Plus meta-skill §1 always-allowed.
-- **Outputs:**
-  - Integrity report (returned to invoking skill; or `/docs/process/doc-integrity-report.md` for manual runs).
-  - Auto-fixes (exact-match only, see below).
-  - Surfaced unresolvable issues (with proposed resolutions).
-- **Hands off to:** Invoking skill (per-increment / phase-close), or human (manual run).
-- **Inherits:** Meta-skill.
+Utility sub-skill. Performs structural checks on the documentation corpus. Invoked by `phase-close` (full sweep) and `increment-close` (scoped sweep). Cited explicitly under the utility-sub-skill carve-out in `_meta` §6.
 
-## Skill-specific halt triggers
+Does not modify documents (with one narrow exception in §6 below). Produces a report; the calling skill decides what to do with findings.
 
-- T-DI-1: Auto-fix would require non-trivial semantic judgment — surface, don't fix.
-- T-DI-2: Cross-reference is broken but multiple plausible fixes exist — surface options, don't pick.
-- T-DI-3: Bidirectional link required but only one direction present, and the other end's status is ambiguous — surface.
-- T-DI-4: Withdrawn artifact is referenced by an in-scope artifact — surface for human direction (withdrawn artifacts shouldn't be referenced; this may be a stale link or a genuine need for un-withdrawal — see workflow.md §14).
+## Inputs
 
-## Checks performed
+Determined by `scope` argument from the invoking skill:
+- `scope: full` — all permanent docs, all transient docs, all decision-record INDEXes
+- `scope: increment <inc-slug>` — only the increment's outputs and the permanent docs they reference
 
-### 1. INDEX consistency
+Plus always-allowed set (`_meta` §1).
 
-For every doc in scope, verify an INDEX row exists with current status. Surface mismatches.
+## Outputs
 
-### 2. Cross-reference resolution
+- An integrity-report markdown file at the appropriate transient location
+- A structured findings list returned to the caller per `_meta` §13
 
-For every link from one doc to another (markdown link, explicit reference, decision-record citation):
-- Target exists.
-- Target status is `active` / `accepted` / `delivered` / `in-progress` — not `deprecated` / `superseded` / `withdrawn` / `superseded-by-increment` / `abandoned`.
-- Halt T-DI-4 if reference to `withdrawn` artifact found.
-- For `deprecated` / `superseded` references: surface as warning (not necessarily an error — historical references in retrospectives are valid).
+## Checks (in order)
 
-### 3. Tag vocabulary
+### Check 1 — Reference existence
 
-Every tag used in `.md` / `.feature` is in `/docs/process/tag-vocabulary.md`. Unknown tags → surface (do not auto-add).
+For every `Grounded in:` declaration in scope:
+- Each listed source must exist at the declared path.
+- Each must be readable (not 0 bytes).
 
-### 4. Glossary completeness
+For every cross-reference (markdown links to other docs, by-ID references):
+- The target document must exist.
+- If the reference is by ID (`CDR-007`, `ADR-014`), the ID must be present in the target's index.
 
-Every domain noun appearing in capability specs, aggregates, scenarios — verifies presence in glossary. Surface missing entries (do not author — glossary authoring is restricted by meta-skill §9 carve-out).
+Findings: `MISSING_REFERENCE`
 
-### 5. Decision-record supersession (bidirectional)
+### Check 2 — Reference scope
 
-For each decision record with status `superseded`:
-- Has forward link to superseding record.
-- Superseding record has back link to this one.
-- Both rows in INDEX reflect supersession.
+For each `Grounded in:` source:
+- The source must be either in the always-allowed set OR within the invoking skill's manifest as declared in its SKILL.md.
+- A skill that grounded in a doc outside its declared manifest is a workflow defect.
 
-For each decision record with status `withdrawn`:
-- No incoming references from currently-accepted artifacts.
-- Optionally has `previously-considered:` link from a later fresh proposal — these are valid.
+Findings: `OUT_OF_SCOPE_REFERENCE`
 
-For each decision record with status `accepted` that has a `previously-considered: <X>` field:
-- X exists with status `withdrawn`.
+### Check 3 — Reference currency
 
-### 6. Increment-level supersession (bidirectional, corrective pattern)
+For each reference target:
+- Status must not be `deprecated` or `withdrawn`.
+- A `superseded` record is referenceable only when the referencing record explicitly notes `supersedes-chain: <list>` for historical context.
 
-For each increment with `@corrects:inc-NNN` declared in `scope.md`:
-- The corrected artifacts (as named in the corrective CDR/ADR) have their status updated to include `superseded-by-increment: inc-MMM`.
-- Conversely, every artifact with `superseded-by-increment: inc-MMM` traces to an increment that declares the corresponding `@corrects:` link.
-- Halt T-DI-3 if only one direction present.
+Findings: `STALE_REFERENCE`
 
-### 7. `Grounded in:` lint
+### Check 4 — Supersession bidirectionality
 
-For each step-summary block in `step-log.md` (or `phase-log.md` for full sweep), validate each entry in the `Grounded in:` list:
-- **Existence:** doc path exists.
-- **Scope:** the doc was loadable by the citing skill — in meta-skill §1 always-allowed, or in the skill's declared Inputs, or in the citing increment's Developer Context Manifest.
-- **Currency:** doc status is not `deprecated` / `superseded` / `withdrawn` / `superseded-by-increment`.
+For every record with `superseded-by: <id>`:
+- The target record must exist.
+- The target record must declare `supersedes: <this-id>` (bidirectional).
 
-Semantic grounding ("does this doc actually support this claim?") is a Gate-3 / Gate-4 spot-check responsibility — explicitly out of scope here.
+For every record with `supersedes: <id>`:
+- The target record must exist.
+- The target record must declare `superseded-by: <this-id>`.
 
-### 8. Capability-feature alignment
+Findings: `BROKEN_SUPERSESSION`
 
-Every in-scope capability has at least one `.feature` file with scenarios covering its AC IDs. Every `# AC: AC-N` reference in a scenario points to an existing AC. Surface mismatches.
+### Check 5 — Status state machine
 
-### 9. Component-ADR alignment
+For every decision record:
+- Status must be one of: `proposed`, `accepted`, `superseded`, `deprecated`, `withdrawn`.
+- If `proposed`: the record must have been created within an active phase or increment (not stranded from a closed phase).
+- If `accepted`: must have a `accepted_at: <timestamp>` and a `approved_at_gate: <gate-id>`.
+- If `superseded`: must have `superseded-by:` and `superseded_at:`.
+- If `deprecated`: must have `deprecated_reason:` and `deprecated_at:`.
+- If `withdrawn`: must have `withdrawn_reason:` and `withdrawn_at:`; status is terminal.
 
-Every component referenced in plans/scenarios has a doc. Every ADR's referenced components exist. Surface broken links.
+Findings: `INVALID_STATUS`, `ORPHAN_PROPOSED`
 
-### 10. Rename auto-fix (exact-match only)
+### Check 6 — TBD-ID resolution
 
-When `phase-close` detects a renamed file via git history with **exact-match content** (no other edits since the previous commit), `doc-integrity` may auto-update incoming references. Any non-exact-match (renamed AND edited) requires human direction — halt T-DI-1.
+For every TBD-* ID in scope:
+- In `docs/permanent/...` (any record with `status: accepted`): must be zero (TBD-* must not appear in any accepted record at any time — they're resolved at gate-acceptance per M14, not at close).
+- In `docs/transient/<phase>/proposed/...` or other transient locations: TBD-* is permitted (records are proposed; numbering happens at gate-acceptance promotion).
 
-## Process
+Findings: `UNRESOLVED_TBD` (now a critical finding regardless of when discovered — accepted records should never have TBD-*).
 
-1. **Determine scope** from invocation: per-increment (with file list) or full sweep.
+### Check 7 — Withdrawn/deprecated reference checks
 
-2. **Run checks 1-9** in order.
+For every `withdrawn` or `deprecated` record:
+- Scan permanent docs and code for references to its ID.
+- A reference from another accepted record or from code is a finding.
 
-3. **For each violation:**
-   - Trivially auto-fixable + low-risk (broken markdown link to a clearly renamed file in scope; exact-match rename detected; INDEX row missing for a doc that exists) → auto-fix, record in report.
-   - Anything else → surface in report with proposed resolution(s).
+Findings: `REFERENCE_TO_WITHDRAWN`, `REFERENCE_TO_DEPRECATED`
 
-4. **For each halt trigger fired:** stop fixing within that domain, surface, continue with other domains.
+### Check 8 — Feeds-into validity
 
-5. **Return integrity report** to invoking skill. Per-increment: brief summary of fixes + surfacing. Full sweep: comprehensive `doc-integrity-report.md`.
+For every transient doc:
+- If it has a `feeds-into:` header, each target permanent doc must exist (and be appropriate for the content type).
+- If it has no `feeds-into:`, it is marked as scaffolding (eligible for pruning at close without absorption).
 
-## Report structure
+Findings: `INVALID_FEEDS_INTO`
+
+### Check 9 — INDEX consistency
+
+For each subtree INDEX (per workflow.md §15.8 — capabilities, aggregates, features, flows, components, each decision-record type):
+- Every file in the subtree must appear as an entry in the INDEX.
+- Every INDEX entry must correspond to an existing file.
+- For decision-record namespaces: number sequence must be gap-free (gaps indicate either deletion, which is forbidden, or numbering errors).
+- For slugged subtrees: ordering follows the convention (status descending, then alphabetical) but is not strictly enforced — drift here is a routine finding, not critical.
+- Every entry's `status:`, `tags:`, `refs:` match what's in the underlying file's frontmatter.
+- Every entry's `refs:` is bidirectional — if entry A lists B in refs, B must list A.
+
+Findings: `INDEX_DRIFT`, `BROKEN_BIDIRECTIONAL_REF`
+
+### Check 10 — Tag vocabulary
+
+For every tag used on any record (in `tags:` fields anywhere — capability specs, feature specs, flow files, ADRs, BDD scenarios, INDEX entries):
+- The tag must be defined in `docs/permanent/process/tag-vocabulary.md`.
+- Undefined tag usage halts during workflow runs; at integrity-sweep time, undefined tags are surfaced as critical findings.
+
+Findings: `UNDEFINED_TAG`
+
+### Check 10 — Rename-detection auto-fix (narrow)
+
+The one modification authorized in doc-integrity: exact-rename references can be auto-fixed.
+
+Detection: if a file was renamed within the increment (detected via `git diff --name-status`) AND references to the old path resolve to a unique new path:
+- Update the references.
+- Log the auto-fix in the integrity report under `AUTO_FIXED`.
+
+Heuristic similarity matches are **not** auto-fixed. If a reference is broken and there's no exact-rename evidence, surface as `MISSING_REFERENCE`.
+
+## Severity classification
 
 ```
-## Doc Integrity Report — [scope] — [timestamp]
-### Auto-fixed
-- <issue> in <path> — fixed: <description>
-### Needs attention (surfaced)
-- <issue> in <path> — proposed resolution: <option(s)>
-### Halts
-- <trigger> in <path>
-### Stats
-- Docs checked: N
-- Cross-refs validated: M
-- Auto-fixes applied: X
-- Surfaced: Y
-- Halts: Z
+CRITICAL (must resolve before close):
+  - BROKEN_SUPERSESSION
+  - INVALID_STATUS
+  - UNRESOLVED_TBD in permanent docs
+  - REFERENCE_TO_WITHDRAWN or REFERENCE_TO_DEPRECATED from accepted records or code
+  - INDEX_DRIFT
+
+ROUTINE (surface but do not block close):
+  - MISSING_REFERENCE in transient docs (may be expected during draft)
+  - STALE_REFERENCE where supersedes-chain note is missing but not strictly required
+  - INVALID_FEEDS_INTO (signals consolidation will fail; should fix but not blocker)
+  - OUT_OF_SCOPE_REFERENCE in transient (signals manifest discipline gap; routine for now)
 ```
 
-## Notes
+## Output format
 
-- Auto-fix conservatism is a deliberate stance — false negatives (missing a fix) are recoverable; false positives (wrong fix applied silently) are not.
-- The bidirectional supersession discipline is what makes the audit trail durable. Without back-references, history runs only forward and the past becomes invisible.
-- Withdrawn-reference checks (#4) catch the most common drift: a previously-proposed decision was withdrawn, but some downstream artifact still cites it. The skill surfaces these for human direction because the resolution is context-dependent (delete the citation, replace with a different ADR, or revisit whether withdrawal was correct).
-- `Grounded in:` lint (#7) is the mechanical layer of grounded-claims discipline. Semantic adequacy is human review territory.
-- Utility-sub-skill status means this skill is invokable from other skills (specifically `increment-close` and `phase-close`). No other skill currently holds this status.
+```
+# Doc-integrity report
+Scope: <full | increment <slug>>
+Run at: <timestamp>
+
+## Summary
+- Critical findings: <count>
+- Routine findings: <count>
+- Auto-fixed: <count>
+
+## Findings
+### CRITICAL
+- type: BROKEN_SUPERSESSION
+  record: ADR-014
+  detail: declares superseded-by: ADR-022, but ADR-022 does not declare supersedes: ADR-014
+  location: docs/permanent/decision-records/ADR/ADR-014-currency-handling.md
+
+### ROUTINE
+- type: STALE_REFERENCE
+  source: docs/permanent/features/feature-invoicing.md
+  reference: CDR-007 (status: superseded)
+  detail: reference lacks supersedes-chain note
+
+## Auto-fixed
+- type: RENAME
+  from: docs/permanent/capabilities/cap-invoicing.md
+  to: docs/permanent/capabilities/cap-007-invoicing.md
+  updated_references_in: <list of files>
+```
+
+## Halt triggers
+
+`doc-integrity` rarely halts on its own — it surfaces findings to its caller, which decides. It halts only when the corpus is so broken that scanning is impossible (e.g., INDEX.md unreadable, scope argument invalid).
+
+| Trigger ID | Condition | Route-to |
+| --- | --- | --- |
+| T-DI-1 | Invalid scope argument | caller (re-invoke with valid scope) |
+| T-DI-2 | INDEX file unreadable | human |
+| T-DI-3 | Files appear/disappear during scan (active concurrent modification) | retry once, then halt to human |
+
+## Observations
+
+Surface as `routine`:
+- Patterns of findings clustered by skill (signal: that skill's discipline needs reinforcement).
+- Findings consistently auto-fixed via rename (signal: rename-detection is doing useful work; track for stats).
+- Findings consistently produced by a specific template (signal: template needs revision).
+
+Surface as `critical`:
+- A finding type that doesn't fit any defined category (workflow-curator should add a new check type).
+- INDEX_DRIFT detected (workflow invariant violation; integrity model is failing somewhere).

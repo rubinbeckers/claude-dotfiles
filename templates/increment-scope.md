@@ -1,66 +1,54 @@
-# Increment NNN: <slug>
+# Increment scope template
 
-**Status:** in-progress | delivered | abandoned | superseded-by-increment: inc-MMM
-**Tags:** `@inc-NNN` `@phase-NN` `<others>`
-**Started:** YYYY-MM-DD
-**code-changes:** yes | none
-**@corrects:** inc-NNN *(if this is a corrective increment; otherwise omit)*
-**@depends:** inc-NNN, inc-MMM *(declared dependencies on prior delivered increments)*
+```markdown
+# Increment scope: <inc-slug>
 
-## Summary
+feeds-into:
+  - (none — increment-scope content is reflected in INDEX upon delivery; this transient doc is pruned at increment-close)
 
-One-paragraph description of what this increment delivers.
+Grounded in:
+  - docs/transient/phases/<phase-slug>/phase-plan.md (row for this increment)
 
-## In scope
+## Objective
 
-### Capabilities
+<From phase plan row.>
 
-- `/docs/business/capabilities/<name>.md` — slice: <description>
-  - AC: AC-1, AC-2 *(specific AC IDs from the capability spec; the slice may not cover all ACs)*
-- *(repeat per capability in scope)*
+## Capabilities delivered
 
-### Scenarios
+- <cap-NNN-<slug>>: <how this increment delivers it>
 
-- `/features/<capability>.feature` — `@<scenario-tag>` for the in-scope scenarios in this increment.
+## Capabilities partially exercised
 
-### Components affected
+- <cap-NNN-<slug>>: <what's covered, what's deferred>
 
-*(Filled in by `implementation-planner`; left empty at scope-draft time.)*
+## Architecture decisions exercised
 
-- <component-name> — <touch type: new | modified | deprecated>
+- <ADR-NNN-<slug>>: <which aspect>
+
+## Design coverage
+
+- <prototype path>: <which features this covers>
+
+## Dependencies
+
+- <inc-NNN-<slug>>: <delivered status>
 
 ## Out of scope (explicit)
 
-- <item>
-- <item>
+- <items the human or planner explicitly excluded>
 
-These are surfaced now so they don't drift in during refinement / planning / development.
+## Corrects (if corrective increment)
 
-## Acceptance for this increment
+corrects: <inc-NNN-<slug>>
+defect_summary: <what was wrong with the original>
+sources:
+  - <link to failing review verdict, observation, feedback entry, etc.>
 
-A short list of what "done" looks like for this increment specifically. This is increment-level acceptance, narrower than capability-level AC. Should be testable.
+## Approval at Gate 2
 
-- <criterion>
-- <criterion>
+(Filled in at Gate 2.)
 
-## Corrective context
-
-*(Required when `@corrects:` is set.)*
-
-- **Defect being corrected:** <one-line description>
-- **CDR/ADR documenting the defect:** <path to record>
-- **Artifacts being superseded:** <list of paths — each will receive `superseded-by-increment: inc-<this>` at close>
-
-## Doc-only mode
-
-*(Required when `code-changes: none`.)*
-
-- **Doc artifacts touched:** <list>
-- **Why doc-only:** <e.g., "ADR-0012 supersession; no code changes needed">
-
-The orchestrator routes doc-only increments as `increment-start` → doc-authoring skill(s) → `technical-reviewer` (doc-review mode) → `increment-close`. `developer` and `ui-test-engineer` are skipped.
-
-## References
-
-- Phase: `/docs/phases/NN-<slug>/roadmap.md`
-- Step log: `step-log.md` (this folder)
+- Approved by: <human>
+- Approved at: <timestamp>
+- Modifications during gate review: <list>
+```

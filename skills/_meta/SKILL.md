@@ -1,203 +1,308 @@
-# Meta-Skill (shared behavior inherited by all skills)
+---
+name: _meta
+description: Cross-cutting rules every skill in this workflow inherits. Not invoked directly; referenced by other skills.
+---
 
-> Every skill in this workflow inherits the behavior defined here. A skill that does not honor these rules is broken. Skill-specific SKILL.md files may extend this but never weaken it.
+# _meta
 
-## 1. Always-allowed inputs (the single authoritative definition)
+This file defines the rules every skill in this workflow operates under. Skills do not restate these rules — they inherit them. If a skill specifies behavior contradicting `_meta`, `_meta` wins.
 
-These docs are always loadable by any skill, regardless of plan, manifest, or scope. They define project-wide constants the workflow depends on:
+## 1. The always-allowed read set
 
-- `/docs/process/workflow.md`
-- `/docs/process/tag-vocabulary.md`
-- `/docs/process/sequential-increments.md`
-- `/docs/business/domain/glossary.md`
-- `/docs/business/domain/cross-context-invariants.md`
-- `/docs/technical/guidelines/coding-standards.md`
-- `/docs/technical/guidelines/testing-standards.md`
-- `/docs/technical/guidelines/naming-conventions.md`
-- The skill's own SKILL.md and this meta-skill.
+Every skill (orchestration or subagent) may always read, without listing them in its manifest:
 
-This is the single authoritative list. **Workflow.md, SKILL.md files, and templates reference this section by link, never restate.** A skill needing anything else must justify it via its declared `Inputs:`, the increment plan's Developer Context Manifest, or an explicit halt-and-surface.
+- `workflow.md`
+- `agentic-sdlc-principles.md`
+- `doc-structure.md`
+- `.claude/skills/_meta/SKILL.md`
+- The skill's own `SKILL.md` (or, for subagents, the agent definition file)
+- `docs/permanent/architecture/coding-standards.md`
+- `docs/permanent/architecture/testing-standards.md`
+- `docs/permanent/architecture/naming-conventions.md`
+- `docs/permanent/domain/glossary.md`
+- `docs/permanent/process/tag-vocabulary.md` (the canonical tag definitions per workflow.md §15.9)
 
-## 2. Identity contract
+This set is the single source of truth for "always allowed." Any skill that needs a doc not in this set and not in its manifest halts and surfaces the gap.
 
-Every skill must declare, at the top of its SKILL.md:
+**Bootstrap exception (T8).** `project-init` runs *before* the always-allowed set exists — its job is to create the set. It is the only skill exempt from the always-allowed-set dependency. All other skills assume the set exists (project-init's completion is a precondition for any of them).
 
-- **Name** (matches folder name).
-- **Version** (semver).
-- **Purpose** (one sentence).
-- **Triggers from** (which skill or event invokes it).
-- **Inputs** (specific docs and indices, in addition to §1 always-allowed).
-- **Outputs** (specific docs it creates or modifies).
-- **Hands off to** (which skill comes next, or "human" if it ends at a gate).
-- **Halt triggers** (the shared set in workflow.md §7, plus any skill-specific additions).
-- **Utility sub-skill: yes | no** (default: no; see §10).
+## 2. Non-assumption
 
-The orchestrator uses these to verify the loop closes.
+A skill never silently substitutes its own judgement for missing or contradictory input. If a required input is absent, the skill halts with a structured halt entry naming:
+- the missing input
+- the upstream artifact or skill that should have produced it
+- the proposed loopback destination
 
-## 3. Non-assumption principle
+Specifically forbidden: writing a glossary entry, capability spec, design spec, or decision record without grounding in a named source; resolving a contradiction between two source documents by silently picking one; "filling in the obvious."
 
-Skills never proceed by assumption. When ambiguity, gap, or conflict arises, the skill:
+## 3. Context manifest
 
-1. Halts.
-2. Appends a halt entry to `step-log.md` (or the appropriate phase-level doc if pre-increment) using the step summary template (§5).
-3. Surfaces: trigger fired, affected docs (by path), why it blocks, defensible suggested resolution if available.
-4. Returns control with status `awaiting approval`.
+Every subagent receives a context manifest in its invocation prompt. The manifest lists the documents the subagent may read. The subagent reads only those documents (plus the always-allowed set in §1). If the subagent needs a document outside its manifest, it halts and surfaces the need.
 
-## 4. Shared halt triggers
+Orchestration skills run in the main chat and inherit the chat's accumulated context, but they still apply the manifest discipline conceptually: they only act on documents listed in their skill's `Inputs` section, plus the always-allowed set.
 
-The authoritative list is **workflow.md §7**. Skills inherit it. Skill-specific halt triggers extend the list and are declared in the individual SKILL.md.
+## 4. Halt protocol
 
-## 5. Step summary template
-
-Every step ends with an append to `step-log.md`:
+A skill halts by writing a halt entry to the active workflow log and returning to its caller (the orchestrator or, for nested calls, the invoking skill). The halt entry must include:
 
 ```
-## Step Summary — [Phase] / [Skill v<version>] — [ISO timestamp]
-- Did: one-line description
-- Outputs: file paths
-- Decisions logged: decision record paths (TBD-numbered unless this is the registering skill)
-- Grounded in: source docs each claim derives from
-- Open items surfaced: gaps, conflicts, halts (with proposed resolutions)
-- Next: handover target and what it'll do
-- Mode: auto-handover | awaiting approval
+HALT
+  Skill: <skill-name>
+  At-step: <step-id or step-name from this skill's SKILL.md>
+  Reason: <one-line>
+  Missing/Conflicting: <artifacts>
+  Route-to: <skill or human>
+  Re-pass: <gate to re-pass, or "none">
 ```
 
-### The `Grounded in:` field (structural enforcement)
+The orchestrator routes per the halt entry. The skill that resolves the halt produces an output linked back to the halt entry.
 
-For every non-trivial claim or output, list the source doc(s) it derives from.
+## 5. Grounded-in declarations
 
-- `doc-integrity` lints `Grounded in:` entries for **existence** (the doc exists), **scope** (the doc was loadable by this skill — in §1 always-allowed, or in the skill's declared inputs, or in the increment's Developer Context Manifest), and **currency** (not `deprecated`, `superseded`, `withdrawn`, or `superseded-by-increment`). Semantic grounding ("does this doc actually support this claim?") is a Gate-3 / Gate-4 spot-check responsibility for the human.
-
-If a claim cannot be traced to a source, it is an assumption. Move it to `Open items surfaced:` and halt.
-
-## 6. INDEX update discipline
-
-Every doc created or modified requires the corresponding INDEX to be updated in the same step. If the INDEX is not updated, the step is incomplete and may not hand off. Specific responsibilities:
-
-- New capability spec → `capabilities/INDEX.md` row added.
-- New ADR → `architecture/INDEX.md` row added.
-- New component doc → `components/INDEX.md` row added.
-- Status change on existing artifact → row updated.
-- New `.feature` file → `features/INDEX.md` row added.
-- New prototype → `design/INDEX.md` row added.
-- Increment status transitions (`in-progress` → `delivered` / `abandoned` / `superseded-by-increment`) → `increments/INDEX.md`.
-
-## 7. Decision-record number assignment (registering-skill rule)
-
-Final numbers are assigned by the skill that **registers** the decision into its INDEX. Currently:
-
-- **Phase-level decisions** proposed by `phase-intake` are numbered by `phase-intake` at Gate 1 approval.
-- **Increment-level decisions** proposed during an increment (by `business-analyst`, `functional-specifier`, `implementation-planner`, `developer`, or any other increment-scoped skill) are numbered by `increment-close`.
-
-Drafts use the placeholder `<TYPE>-TBD-<slug>.md` until the registering skill assigns the final number. Any non-registering skill needing a final number halts (workflow.md §7 trigger 9).
-
-This rule supersedes any earlier wording that said "only increment-close assigns final numbers" — that wording is obsolete.
-
-## 8. Tag validation
-
-Every doc write validates any tags against `/docs/process/tag-vocabulary.md`. Unknown tags trigger halt trigger 8.
-
-Proposing a new tag: halt with proposed tag, definition, why no existing tag fits. The human approves (which updates `tag-vocabulary.md`) before the skill resumes.
-
-## 9. Glossary authoring carve-out
-
-The default rule is halt-on-missing-term (workflow.md §7 trigger 3). The carve-out:
-
-**Any skill that creates an aggregate or capability spec may author the corresponding glossary entry in the same step.** Currently this is `phase-intake` and `business-analyst`. Authored entries cite the aggregate or capability spec as the source ("definition introduced via `<path>`") and are reviewed at the gate that approves the originating artifact. The gate approves the entry implicitly by approving the artifact.
-
-All other skills halt on missing terms. Surfacing missing terms downstream is a signal that the upstream layer missed something.
-
-## 10. Skill boundaries and the utility sub-skill carve-out
-
-A skill operates only within its declared scope:
-
-- Reads only its declared `Inputs:` plus §1 always-allowed.
-- Writes only its declared `Outputs:`.
-- Does not modify docs owned by other skills.
-
-**Utility sub-skill exception:** a skill that declares `Utility sub-skill: yes` in its identity contract may be invoked from other skills (rather than only by the orchestrator). The currently-declared utility sub-skill is **`doc-integrity`**, invocable from `increment-close` and `phase-close`. No other skill currently holds this status. The exception is opt-in: a skill must explicitly declare itself a utility sub-skill, and the invoking skills must explicitly cite this carve-out when invoking it.
-
-A skill needing to do something outside its boundary (and not authorized via utility sub-skill carve-out) halts (workflow.md §7 trigger 11) and surfaces.
-
-## 11. Mechanical vs. human-judgment outputs
-
-When a skill produces verifications or attestations (typically `technical-reviewer` and `increment-close`), it explicitly separates two categories in its output:
-
-- **Verified mechanically:** items checked by the agent against deterministic rules (coverage thresholds, lint results, scan results, cross-reference resolution, INDEX consistency).
-- **Needs human confirmation:** items that require human judgment (threat-considerations answers, authn/authz declarations, security-critical classification correctness, scope-vs-intent alignment).
-
-This separation is reflected in `review.md` and in the Gate 5 PR checklist. The intent is to prevent the human skimming a long mechanical-pass-summary and implicitly trusting items that actually needed their attention.
-
-## 12. Standards-observations append
-
-Skills that surface standards-related issues (typically `technical-reviewer`, occasionally `developer` when self-flagging) append a one-line observation to `/docs/phases/NN-<slug>/standards-observations.md`:
+Every *artifact* a skill produces declares its `Grounded in:` sources — the specific documents whose content supports the artifact's claims. The declaration is structural, not narrative; it goes in a header field on the artifact.
 
 ```
-[timestamp] [skill] [inc-NNN] [category] one-line description
+Grounded in:
+  - docs/permanent/capabilities/cap-007-invoicing.md
+  - docs/permanent/decision-records/ADR/ADR-014-currency-handling.md
 ```
 
-Categories: `coding`, `testing`, `naming`, `security`, `other`. Appending happens whether or not the observation blocks the current step.
+`doc-integrity` validates structurally that every listed source exists, is in scope for the producing skill, and is current (not deprecated or withdrawn). Semantic grounding ("does this source actually support this claim?") is a human-review responsibility at gates.
 
-`phase-close` synthesizes this file into the retrospective's standards-adequacy section.
+**Granularity (T6).** `Grounded in:` declarations live at the *artifact* level: decision records, capability specs, features, design specs, FDRs/ADRs/CDRs/DDRs, backlog-item specs. Code files and test files do *not* carry individual `Grounded in:` headers — their grounding is the backlog item's spec they implement (which already declares `Grounded in:`). This prevents hundreds of brittle per-file path strings that would go stale on every supersession. `backlog-review`'s dependency-trace checklist resolves code-to-spec grounding via the backlog item's manifest, not via per-file headers.
 
-## 13. Learnings logging
+## 6. Skills don't invoke skills
 
-Every skill, at end of step, evaluates: did anything happen future runs should know about? If yes, append to `/docs/process/learnings/<skill-name>.md`:
+A skill operates only within its declared scope. Skills do not invoke other skills directly. Handovers are managed by the orchestrator.
+
+**Exception — utility sub-skills.** `doc-integrity`, `doc-consolidator`, `workflow-curator`, and `backlog-loop` are declared utility sub-skills. They may be invoked by other skills (typically `phase-close`, `increment-close`, `phase-retrospective`, `increment-start`) within those skills' steps. Any skill invoking a utility sub-skill must cite the carve-out explicitly in its step description. No other sub-skill invocation is permitted.
+
+## 7. Append-only with supersession
+
+Artifacts under `docs/permanent/` are append-only once approved at a gate. Modification is via supersession:
+- A new entry is created with a successor identifier
+- The original's status flips to `superseded-by: <successor-id>` or `deprecated` (with reason)
+- The successor declares `supersedes: <original-id>`
+
+`doc-integrity` validates both directions of the link at every close event.
+
+Code is exempt from append-only (it's a different kind of artifact); decisions, specs, and interpretations are not.
+
+### 7.1 Editorial-change carve-out
+
+Typos, formatting, link fixes, capitalization, and whitespace changes do not require supersession. They are made in-place on the accepted artifact and logged as a single line in a per-document `editorial-log.md` sibling file:
 
 ```
-## [ISO timestamp] — [increment id]
-- Observation: what happened
-- Trigger: what caused it
-- Resolution: how it was resolved (or who decided)
-- Generalizable?: yes / no / unclear (curator's call)
+- timestamp: <ISO>
+  by: <human or skill>
+  scope: typo | formatting | link | capitalization | whitespace
+  description: <one-line description of the change>
 ```
 
-`skill-curator` reads these at phase close.
+`doc-integrity` validates that editorial changes do not touch decision-relevant content — specifically: status fields, IDs, supersession links, accepted decision values, AC text bodies (formatting of AC text is editorial; semantic change is supersession). Boundary-case changes ("is this clarifying or supersession?") default to supersession when ambiguous; the human can override via inline approval (§13).
 
-## 14. Pin re-validation and the override path
+## 8. Decision-record numbering
 
-At session start (via `session-resume`), the meta-skill bootstrap check validates that every pinned skill version in workflow.md §15 is reachable in dotfiles.
+Each decision-record type (CDR, DDR, FDR, ADR) has its own numbering namespace. Numbers are assigned by the **gate-approval step** that promotes the record to `accepted`:
 
-- **Match:** proceed.
-- **Mismatch:** halt with a structured surface listing missing or modified versions.
+- **Phase-level records** (typically domain-wide CDRs, DDRs, architecture-wide ADRs) are numbered at Gate 1 approval, as part of the promotion step in `phase-planning` step 7 (or its equivalent).
+- **Increment-level records** (typically FDRs, capability-scoped CDRs, scoped ADRs) are numbered at Gate 2 approval, as part of the promotion step in `increment-planning` step 9.
 
-**Override path (exceptional):** if mid-phase rollback isn't workable, the human may authorize a forward-pin override:
+Records sit with `TBD-<short-slug>` placeholders only between the authoring subagent's run and the gate's approval — typically minutes. Once accepted, IDs are stable through the rest of the workflow. `doc-integrity` validates that no `TBD-*` IDs appear in any accepted record at any point after the gate that produced them.
 
-- An ADR is created recording: the missing/modified version, the substitute version chosen (nearest available newer version), the rationale, and an explicit "exceptional mid-phase override" acknowledgement.
-- The pin in workflow.md §15 is updated to the substitute.
-- The override is logged for `skill-curator` review at phase end — repeated overrides may signal dotfiles repo hygiene issues.
+Concurrent gate approvals are not a concern in this single-human workflow (gates are sequential by construction), but the numbering routine should still record `assigned_at` timestamps for audit.
 
-Phase-rollback-and-restart is reserved for cases where forward-pin substitution isn't workable (e.g., breaking change in the substitute).
+## 9. Status transitions
 
-## 15. Handover toggle handling
+Decision-record statuses follow this state machine:
 
-Each skill reads its effective handover mode (skill override → project default in workflow.md §15).
+```
+       ┌─────────┐
+       │proposed │
+       └────┬────┘
+            │ (at gate approval)
+            ▼
+       ┌─────────┐         ┌──────────┐
+       │accepted │────────▶│superseded│
+       └────┬────┘         └──────────┘
+            │
+            ▼
+       ┌──────────┐
+       │deprecated│
+       └──────────┘
 
-- `auto`: write step summary, advance to handover target without surfacing.
-- `gated`: write step summary, surface for confirmation, await `proceed`.
+(from proposed only:)
+proposed ───▶ withdrawn (decision never made; rationale required)
+```
 
-Required gates (workflow.md §8) and halt-trigger surfaces always surface regardless of mode.
+`withdrawn` is terminal. A withdrawn decision may be re-proposed under a new identifier, with `prior-withdrawn: <id>` declared on the new proposal. `doc-integrity` validates that `withdrawn` and `deprecated` records are not referenced by accepted records or by code.
 
-## 16. Failure modes
+## 10. Observation surfacing
 
-For failures not covered by halt triggers (tool failure, environment issue):
+Skills surface observations to a single per-phase log: `docs/transient/phases/<phase-slug>/observations.md`. Entries declare a `category` field; `workflow-curator` routes by category at synthesis time.
 
-- Log the failure in `step-log.md` with full context.
-- Status `failed`.
-- Surface: nature, partial outputs (if any), suggested recovery.
+Format:
 
-The orchestrator (or human) decides retry / escalate / abandon.
+```
+- timestamp: 2026-05-24T14:00Z
+  skill: backlog-review
+  category: workflow-defect | standards-coding | standards-testing | standards-naming | other
+  severity: routine | critical
+  pattern: "naming inconsistency: PascalCase vs camelCase in component files"
+  context: "occurred in inc-005, backlog item 'add-invoice-form'"
+  proposed-action: "specify component naming in naming-conventions.md"
+  human_confirmed: false | true
+  references:
+    - <path>
+```
 
-## 17. Inheritance summary
+Severity rules:
+- `critical`: workflow-breaking; halts inline for `improvement-review` regardless of category.
+- `routine`: batched until `phase-retrospective`.
 
-Individual SKILL.md files are permitted to:
+Category guides synthesis routing at retrospective:
+- `workflow-defect` → proposed skill or workflow.md diff.
+- `standards-coding` / `standards-testing` / `standards-naming` → proposed standards doc diff.
+- `other` → surfaced as an open question.
 
-- Add skill-specific halt triggers.
-- Add skill-specific input/output requirements.
-- Specify domain-specific behavior.
+A skill author chooses the category that fits; boundary cases pick one and trust synthesis to route correctly. The two-log model is consolidated into this single log — `workflow-observations.md` and `standards-observations.md` are no longer separate.
 
-Individual SKILL.md files are **not** permitted to:
+## 11. Pin validation
 
-- Disable or weaken any rule in this meta-skill.
-- Bypass tag validation, INDEX updates, step summaries, `Grounded in:` discipline, or mechanical-vs-human-judgment separation.
-- Self-modify on the basis of project-level learnings (only the curator + human can change a skill).
+At every `session-resume`, the orchestrator validates that the pinned skill and template versions (in `skill-versions.lock`) are reachable. Mismatch halts with one of two responses required from human:
+
+- **Override** (recorded as a CDR): proceed with the available version, accept the deviation
+- **Rollback**: restore the pinned version or roll back the project's pin to a known-reachable version
+
+Pin failures cannot be silently absorbed. Mid-phase pin failures generally route to override (rolling back mid-phase is heavier than accepting the deviation).
+
+## 12. Visibility lines
+
+Every skill, including subagents, emits structured status lines per `workflow.md` §15. Subagents emit lines that are returned to the orchestrator as part of their structured return; the orchestrator surfaces them to the human chat.
+
+**Expected-duration bands (T1).** Each skill declares an expected-duration band — typical run-time range under normal conditions. The orchestrator considers a skill "running long" only when it exceeds the upper bound of its band. Bands per current skill:
+
+- `session-resume`: 5–60 seconds.
+- `project-init`: 1–5 minutes (one-time).
+- `phase-start` (includes BA + TA subagents): 3–15 minutes.
+- `phase-planning`: 1–5 minutes.
+- `phase-close`, `phase-retrospective`: 1–5 minutes each.
+- `improvement-review`: 2–10 minutes (depends on diff count).
+- `increment-start` (includes FA + TL subagents): 3–10 minutes.
+- `increment-planning`: 1–5 minutes.
+- `increment-close` (includes full regression): 2–20 minutes depending on suite size.
+- `backlog-loop`: cumulative; expected per-item: 2–15 minutes for develop, 1–10 for test, 1–5 for review.
+- `feedback-triage`: 30 seconds – 2 minutes per entry.
+- Utility sub-skills (`doc-integrity`, `doc-consolidator`, `workflow-curator`): 30 seconds – 3 minutes scoped; up to 10 minutes for full sweep.
+
+A skill exceeding its upper bound is a workflow-defect signal: either the task is too large (split it), the subagent is stuck (escalate), or the band needs revision (workflow observation, `category: workflow-defect`).
+
+## 13. Subagent invocation and return contracts
+
+### 13.1 Invocation contract (orchestrator → subagent)
+
+Every subagent invocation includes a fenced manifest block at the top of the prompt:
+
+```
+<<<MANIFEST>>>
+subagent: <agent-name>
+scope-id: <phase-or-increment-or-item-slug>
+inputs:
+  - <path>
+  - <path>
+allowed-writes:
+  - <path-or-directory>
+gate-state: <current-gate-or-"in-loop">
+parent-commit: <git-hash or "n/a">
+<<<END>>>
+```
+
+The orchestrator constructs this block from the subagent's declared manifest in its definition file. Step 1 of every subagent reads this block, enumerates it, and asserts it matches the inputs declared in its own definition. Mismatch halts with `T-<agent>-MANIFEST` (specific halt-trigger per subagent).
+
+The fenced block is the architectural enforcement of context engineering — the subagent's discipline is no longer policy-based.
+
+### 13.2 Return contract (subagent → orchestrator)
+
+Every subagent return is fenced and structured:
+
+```
+<<<RETURN>>>
+status: success | halt
+files_written:
+  - <path>
+  - <path>
+key_findings: <prose, <=200 words>
+grounded_in:
+  - <source>
+  - <source>
+observations:
+  - timestamp: <ISO>
+    category: workflow-defect | standards-coding | standards-testing | standards-naming | other
+    severity: routine | critical
+    pattern: <description>
+halt:
+  at_step: <step>
+  reason: <one-line>
+  route_to: <destination>
+<<<END>>>
+```
+
+The orchestrator parses the fenced block deterministically — unfenced YAML in chat would be ambiguous and breaks silently on formatting drift. Malformed returns halt with `T-<agent>-RETURN` and route to human.
+
+### 13.3 Approval-prompt contract (human ↔ orchestrator at gates)
+
+The human never edits INDEX directly to signal gate approval. At every gate halt, the orchestrator emits a structured approval prompt:
+
+```
+═══════════════════════════════════════════════
+APPROVAL REQUIRED — Gate <N> (<gate-name>)
+Active scope: <phase-or-increment-slug>
+
+Summary of artifacts produced:
+  <2–3 sentence summary>
+
+Files for review (read at your discretion):
+  - <path 1> — <one-line summary>
+  - <path 2> — <one-line summary>
+  ...
+
+To approve: reply "approve" (or "approve with modifications: <notes>").
+To reject: reply "reject: <reason>".
+To request changes: reply "changes: <list>".
+═══════════════════════════════════════════════
+```
+
+The orchestrator parses the human's reply, writes the corresponding `gate_status:` entry to INDEX (see §14), and routes per the response. The human's role is to read (or skim) and decide; the orchestrator handles all file modifications.
+
+## 14. No filesystem traversal in subagents
+
+Subagents must not glob, grep, or list-directory beyond their manifest. They may only read paths that appear in their manifest or in the always-allowed set. Path validation happens at read time: the subagent's first action on a non-manifest path is to halt.
+
+The orchestrator may traverse (it is the bookkeeper); subagents may not.
+
+## 15. The principles document is referenced, not duplicated
+
+`agentic-sdlc-principles.md` is the workflow-agnostic statement of why these rules exist. Skills do not restate principles in their SKILL.md; they reference the relevant principle by section when explaining a halt or a behavior. This keeps skills readable and the principles document the canonical reference.
+
+## 16. Gate-state schema in INDEX
+
+Every gate decision is recorded in INDEX under a `gate_status:` block:
+
+```yaml
+gate_status:
+  - gate_id: gate-1@<phase-slug>
+    decision: approve | reject | changes
+    decided_at: <ISO>
+    decided_by: <human-identifier>
+    modifications: <free text or "none">
+    notes: <free text or "none">
+  - gate_id: gate-2@<phase-slug>/<inc-slug>
+    decision: approve
+    ...
+```
+
+`session-resume` reads this to determine routing per `workflow.md` §13. The orchestrator writes entries based on the human's response to approval prompts (§13.3). The human never edits this directly; the orchestrator does.
+
+For "changes" decisions, the orchestrator routes back to the relevant upstream skill with the change list as input. For "reject", the orchestrator routes per the gate's defined rejection destination (typically the producing skill, re-passing).
+
+End of `_meta/SKILL.md`.

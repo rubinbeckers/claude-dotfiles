@@ -1,51 +1,48 @@
+# Aggregate template
+
+```markdown
+---
+id: agg-NNN-<slug> | TBD-<slug>
+name: <name>
+status: proposed | accepted | superseded | deprecated
+introduced_in: <phase-slug>
+accepted_at_gate: null | gate-1@<phase-slug>
+superseded_by: null
+supersedes: null
+data_classification: public | internal | confidential | restricted
+---
+
 # Aggregate: <name>
 
-**Bounded context:** <name>
-**Status:** active | deprecated | superseded-by-increment: inc-NNN
-**Tags:** `@<area>` `<other tags>`
-**Last-modified-by:** inc-NNN
+Grounded in:
+  - <capabilities that introduced this aggregate>
+  - <prior aggregate if superseding>
 
-## Purpose
+## Aggregate root
 
-One-paragraph description of what this aggregate represents in the domain.
-
-## Data classification
-
-`public` | `internal` | `confidential` | `restricted`
-
-This classification applies to instances of this aggregate when persisted or transmitted. Capabilities touching this aggregate inherit a classification of at least this level.
+<Entity name> — <one-line description>
 
 ## Entities
 
-- **<EntityName>** — <one-line role>
-  - Fields: <list>
-  - Identity: <how identified>
+- <Entity name>: <description, role>
+- ...
 
-## Value Objects
+## Value objects
 
-- **<VOName>** — <description>
-  - Fields: <list>
-  - Equality: <by-value semantics>
+- <Type name>: <description>
+- ...
 
 ## Invariants
 
-- <constraint that must always hold>
-- <constraint>
+- <invariant 1: a business rule that must always hold within this aggregate>
+- <invariant 2>
+- ...
 
-## Behaviors (commands)
+## Capabilities exercising this aggregate
 
-- **<behavior name>** — <what it does>
-  - Pre: <pre-conditions>
-  - Post: <post-conditions>
-  - Events emitted: <list>
+- <cap-NNN-<slug>>: <how>
 
-## Relationships
+## Cross-aggregate references
 
-- **References:** <other aggregates referenced by ID, e.g., "holds a CustomerId reference to Customer aggregate">
-- **Referenced by:** <other aggregates that reference this one>
-
-## References
-
-- Capabilities using this: <list>
-- DDRs: <list>
-- Components: <list>
+- <agg-NNN-<slug>>: <reference type — by-id, snapshot, etc.>
+```
