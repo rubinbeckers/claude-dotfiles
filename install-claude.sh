@@ -1,54 +1,56 @@
 #!/usr/bin/env bash
+# install-claude.sh — macOS / Linux symlink installer for claude-dotfiles v1.1
 #
-# install-claude.sh
+# Creates:
+#   ~/.claude/commands/<skill>.md -> ~/.dotfiles/skills/<skill>/SKILL.md (per skill directory)
+#   ~/.claude/agents/<agent>.md   -> ~/.dotfiles/agents/<agent>.md      (per agent file)
 #
-# Symlinks the agentic-SDLC workflow v1.0 dotfiles into Claude Code's
-# user-level discovery directories:
-#   ~/.dotfiles/skills/<skill>/SKILL.md  →  ~/.claude/commands/<skill>.md
-#   ~/.dotfiles/agents/<agent>.md        →  ~/.claude/agents/<agent>.md
-#
-# Run on first install of the dotfiles and any time skills/agents are added
-# or renamed. Symlinks point at the live files in this repo, so updates
-# (e.g. `git pull` on the dotfiles) propagate without re-running this script.
-#
-# Works on macOS and Linux. The Windows equivalent is install-claude.ps1.
+# Re-running is safe — overwrites existing symlinks. Re-run when skills or agents
+# are added / removed / renamed.
 
 set -euo pipefail
 
-dotfiles="${HOME}/.dotfiles"
-commands_dir="${HOME}/.claude/commands"
-agents_dir="${HOME}/.claude/agents"
+DOTFILES_DIR="${DOTFILES_DIR:-$HOME/.dotfiles}"
+CLAUDE_DIR="${CLAUDE_DIR:-$HOME/.claude}"
+COMMANDS_DIR="$CLAUDE_DIR/commands"
+AGENTS_DIR="$CLAUDE_DIR/agents"
 
-mkdir -p "${commands_dir}" "${agents_dir}"
+if [[ ! -d "$DOTFILES_DIR" ]]; then
+  echo "Error: dotfiles directory not found at $DOTFILES_DIR" >&2
+  echo "Clone the repo there, or set DOTFILES_DIR to its location." >&2
+  exit 1
+fi
 
-# --- Skills: one per directory, each with SKILL.md ---
+mkdir -p "$COMMANDS_DIR" "$AGENTS_DIR"
+
+echo "Installing skills as commands..."
 skill_count=0
-for skill_path in "${dotfiles}"/skills/*/; do
-  [ -d "${skill_path}" ] || continue
-  skill_file="${skill_path}SKILL.md"
-  skill_name="$(basename "${skill_path}")"
-  link_path="${commands_dir}/${skill_name}.md"
-
-  if [ -f "${skill_file}" ]; then
-    ln -sf "${skill_file}" "${link_path}"
-    echo "Linked skill:  ${skill_name}"
+for skill_dir in "$DOTFILES_DIR/skills/"*/; do
+  skill_name="$(basename "$skill_dir")"
+  skill_file="$skill_dir/SKILL.md"
+  if [[ -f "$skill_file" ]]; then
+    target="$COMMANDS_DIR/$skill_name.md"
+    ln -sfn "$skill_file" "$target"
+    echo "  $skill_name -> $skill_file"
     skill_count=$((skill_count + 1))
   fi
 done
 
-# --- Agents: one .md file each, flat layout under agents/ ---
+echo "Installing agents..."
 agent_count=0
-if [ -d "${dotfiles}/agents" ]; then
-  for agent_file in "${dotfiles}"/agents/*.md; do
-    [ -f "${agent_file}" ] || continue
-    agent_name="$(basename "${agent_file}")"
-    link_path="${agents_dir}/${agent_name}"
-
-    ln -sf "${agent_file}" "${link_path}"
-    echo "Linked agent:  ${agent_name%.md}"
+for agent_file in "$DOTFILES_DIR/agents/"*.md; do
+  if [[ -f "$agent_file" ]]; then
+    agent_name="$(basename "$agent_file")"
+    target="$AGENTS_DIR/$agent_name"
+    ln -sfn "$agent_file" "$target"
+    echo "  $agent_name -> $agent_file"
     agent_count=$((agent_count + 1))
-  done
-fi
+  fi
+done
 
-echo ""
-echo "Done. ${skill_count} skills linked, ${agent_count} agents linked."
+echo
+echo "Installed $skill_count skills and $agent_count agents."
+echo "Dotfiles at: $DOTFILES_DIR"
+echo "Claude config at: $CLAUDE_DIR"
+echo
+echo "Symlinks point at the live files; 'git pull' on the dotfiles propagates without re-running."

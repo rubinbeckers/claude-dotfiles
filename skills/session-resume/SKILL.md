@@ -1,168 +1,96 @@
 ---
 name: session-resume
-description: Canonical session entry point. Use whenever a working session begins on this project, regardless of whether work is fresh, mid-phase, mid-increment, or post-merge. Trigger phrases include 'continue', 'resume', 'where were we', 'pick up', or any unspecified opening on an existing project.
+description: The canonical entry point for any session that isn't a fresh project init. Reads INDEX, validates skill pins, scans git on the operating branch, and routes to the correct next skill. Invoked by the human saying "resume" or any unspecified opening.
 ---
 
 # session-resume
 
-This is the only canonical session-entry skill. The human invokes it (or it runs automatically at session start) before any other workflow action. Its job is to read the workflow's current state and route to the next correct skill.
+The orchestrator's router. Every session that isn't `project-init` starts here.
 
-The skill operates in the orchestrator's chat (main chat). It does not delegate to a subagent.
+## Inputs
 
-## Inputs (read in order)
-
-1. `workflow.md` — the workflow contract. Read first, always, every session.
-2. `agentic-sdlc-principles.md` — the principles this workflow instantiates.
-3. `INDEX.md` — current project state (active phase, active increment, status, last-recorded action).
-4. `skill-versions.lock` — pinned skill versions.
-5. Git state (via `git log`, `git status`, `git branch --show-current`).
-6. The active phase's transient directory, if a phase is active: `docs/transient/phases/<phase-slug>/`.
-
-The skill inherits the always-allowed read set from `_meta/SKILL.md` §1.
+- `docs/INDEX.md`
+- `docs/skill-versions.lock`
+- Git state on `develop` and on the active increment branch (if any)
+- The human's opening message (which may be empty, "resume", or substantive input)
 
 ## Outputs
 
-- Updates `INDEX.md` to reflect any state changes detected (e.g., a merged PR since last session).
-- Emits a status summary to the human chat: where the project is, what skill is next, what action is being taken.
-- Invokes the next skill in the workflow, or halts if state is inconsistent.
+- Routing decision (which skill to invoke next, or which question to surface to the human)
+- INDEX updates if state has advanced since the last session (e.g., a PR merged externally)
 
 ## Steps
 
-### Step 1 — Load the workflow
+### 1. Validate pins and surface TBD aging
 
-Read `workflow.md` end to end. Internalize §1 (levels), §4 (skill inventory), §5 (gates), §6 (phase flow), §7 (increment flow), §8 (halt matrix), §13 (session lifecycle), §15 (status protocol).
+Read `docs/skill-versions.lock`. Check that every referenced skill and template version is reachable. Mismatch halts with two options for the human (override → log as a DR; rollback → restore pinned versions or roll back the project's pin).
 
-This step is non-negotiable and runs even if the chat session has just read `workflow.md`. The workflow is the contract; rules drift if it isn't reloaded.
-
-Emit: `Workflow loaded.`
-
-### Step 2 — Validate pinned skill versions
-
-Per `_meta` §11: read `skill-versions.lock`, verify each pinned skill exists and matches in the skills repo. On mismatch, halt with:
+Then scan the active phase's proposed artifacts (under `docs/permanent/...` with `status: proposed`) for `TBD-*` IDs that pre-date the most recent `gate_status:` entry in INDEX. A `TBD-*` ID surviving past its gate is a `doc-integrity` failure waiting to happen — surface them now so they don't blindside the next close gate:
 
 ```
-HALT
-  Skill: session-resume
-  At-step: pin-validation
-  Reason: pinned skill version not reachable
-  Missing/Conflicting: <skill-name>@<pinned-version>
-  Route-to: human
-  Re-pass: none
+⚠ Aging TBD-* IDs detected (older than the most recent gate):
+  - <artifact path>: <TBD-slug>  (introduced <ISO>, gate-N decided <ISO>)
+  ...
+
+These should have been numbered at their gate. Possible causes: gate walked away mid-approval, or an artifact authored after the gate slipped past the numbering step. Recommend resolving before next close.
 ```
 
-On success, emit: `Pin validation: <N> skills, <M> templates pinned and reachable.`
+Don't halt — just surface. The routing decision in step 5 proceeds normally; the aging warning is informational so the human can clean up at the next gate.
 
-### Step 3 — Read project state
+### 2. Apply staged skill diffs
 
-Read `INDEX.md`. Extract:
-- Active phase (slug, status: planning | in-progress | closing | retrospective | improvement-review | closed)
-- Active increment (slug, status: planning | in-progress | closing | awaiting-merge | closed)
-- Last halt (if any): source skill, reason, route-to destination
-- Pending gates (if any)
+Per the staging rule in `phase-close`: if any diffs were staged at the end of the prior session (because they targeted critical-path skills like `_meta`, `session-resume`, or `increment-execute`), apply them now before any routing decision. The session then continues with the updated skills loaded.
 
-If `INDEX.md` is missing or malformed, halt routing to `project-init`.
+### 3. Scan git
 
-### Step 4 — Scan git for state drift
+Fetch the operating branch (typically `develop`). Compare the current state to what INDEX expects:
 
-Run `git log` to enumerate commits since the last recorded action in `INDEX.md`. For each commit:
-- If on a known increment branch and the branch has been merged to `develop` since last session → mark that increment as `closed` in INDEX, advance state. (The workflow does not observe `main`; promotion from `develop` to `main` is out-of-workflow per workflow.md §17.)
-- If on `develop` but not associated with any known increment branch → halt with undocumented-develop-commits per `workflow.md` §13 step 4. The workflow never scans `main` (§17).
-- If on the current active increment branch and not merged → no state change, increment still in progress.
+- Active increment branch present? Merged?
+- Any fix branches on the increment? Their status?
+- Undocumented commits on `develop` since the last recorded state? (If yes, halt — those need to be backfilled into the audit trail before routing proceeds.)
 
-Run `git status` to detect uncommitted local changes. Surface to human but do not halt (they may be intentional working changes).
+### 4. Read INDEX state and parse the human's input
 
-### Step 4.5 — Apply staged skill diffs (M6)
+Read the active phase, the active increment (if any), and the most recent `gate_status:` entries. Note the human's opening message:
 
-Per `_meta` §11 staging rule: if pending skill diffs were staged at the prior `improvement-review` and target critical-path skills (`_meta`, `improvement-review`, `workflow-curator`, `session-resume`, `backlog-loop`), apply them now — before the routing decisions in step 5 — so the new session reads the updated skills.
+- Empty, or generic ("resume", "continue") → no new directive.
+- Substantive content (a fix request, an approval, a rejection, a new question) → carry it into routing.
 
-Diff application uses `workflow-curator` apply-mode (cited under utility-sub-skill carve-out, `_meta` §6). For each pending diff:
-- Read the staged diff file from `docs/transient/pending-skill-diffs/`
-- Apply to the target skill file
-- Validate the resulting file is well-formed (frontmatter parses, markdown sections balanced)
-- If well-formed: remove from staging
-- If malformed: revert, halt with T-SR-7
+### 5. Route
 
-After all pending diffs apply, proceed to step 5 with the updated skill content (which the orchestrator will re-load).
+| INDEX state | Human input | Action |
+|---|---|---|
+| No active phase | Any | Wait for raw input; if provided, invoke `phase-design`; otherwise prompt. |
+| Phase `design`, Gate 1 pending | Any | Resume `phase-design` at its gate step. |
+| Phase `in-progress`, no active increment | Any | Invoke `increment-design` for next increment in plan. |
+| Increment `design`, Gate 2 pending | Any | Resume `increment-design` at its gate step. |
+| Increment `in-progress` | Any | Resume `increment-execute` at the last recorded position. |
+| Increment `closing` | Any | Resume `increment-close` at the last step. |
+| Increment `awaiting-merge` | No new input directed at the increment | Assume approval; flip status to `closed`; advance to next `increment-design` (or to `phase-close` if this was the last increment in the phase). |
+| Increment `awaiting-merge` | Fix request | Re-invoke `increment-close` at step 9 (the listen step), passing the human's input as if it had just arrived in chat. The skill handles the fix per its step 10–11. |
+| Increment `awaiting-merge` | Explicit approval | Re-invoke `increment-close` at step 9 with the approval input; the skill advances to step 12. |
+| Increment `awaiting-merge` | CI failure report on a fix branch | Re-invoke `increment-close` at step 9 with the CI log as part of the input; the skill re-invokes `increment-develop` in `mode: fix` with the CI log in the manifest, on the existing fix branch. |
+| Increment `awaiting-merge` | Input describes a new increment or scope (raw input for the next thing, a feature request, a substantive direction change) | **Halt — no implicit approval.** Surface the routing ambiguity to the human and ask them to explicitly resolve the current increment first: (a) "approved" / "ship it" → flip to `closed`, then advance with the new input; (b) "reject: <reason>" → route per the rejection's destination; (c) "fix: <description>" → handle as a fix request and re-prompt for the new direction after. Also list any open fix branches on the increment so the human can clean them up before pivoting. |
+| Phase `closing` | Any | Resume `phase-close` at the last step. |
 
-### Step 5 — Route
+### 6. Surface routing
 
-Based on the combined state from steps 3, 4, and 4.5, read the latest `gate_status:` entries in INDEX (per `_meta` §16) and route to the next skill per the routing table below.
-
-```
-State                                          → Action
-─────────────────────────────────────────────────────────────────────────────
-No INDEX.md exists                             → invoke project-init
-INDEX exists, no active phase, raw-input present → invoke phase-start
-INDEX exists, no active phase, no raw input    → halt to human, await phase initiation
-Active phase, status=planning, no gate-1 entry → resume in phase-planning (re-enter at step it halted on)
-Active phase, status=planning, gate-1 approved → invoke increment-start (first increment)
-Active phase, gate-1 changes/reject            → re-pass relevant phase-* skill per the changes
-Active phase, no active increment, increments remain in plan → invoke increment-start (next increment)
-Active phase, no active increment, all increments delivered → invoke phase-close
-Active phase, status=closing                   → resume in phase-close
-Active phase, status=retrospective             → resume in phase-retrospective
-Active phase, status=improvement-review        → invoke improvement-review (Gate 3)
-Active phase, status=closed (and next-phase trigger present) → invoke phase-start (new phase; reads carry-forward per workflow.md §15.6)
-Active increment, status=planning, no gate-2 entry → resume in increment-planning
-Active increment, status=planning, gate-2 approved → invoke backlog-loop
-Active increment, gate-2 changes/reject        → re-pass relevant increment-* skill per the changes
-Active increment, status=in-progress           → invoke backlog-loop (resumes mid-loop)
-Active increment, status=closing               → resume in increment-close
-Active increment, status=awaiting-merge        → halt to human, surface "merge PR before resuming"
-Last halt recorded, not yet resolved           → resume at halt's route-to destination
-Undocumented develop commits exist             → halt, require corrective-increment backfill
-```
-
-### Step 6 — Emit status summary and invoke
-
-Before invoking the next skill, emit a status summary in this format:
+Emit a status line stating the routing decision:
 
 ```
-═══════════════════════════════════════════════
-Session resumed.
-Project: <project-name>
-Active phase: <slug> (status: <status>)
-Active increment: <slug or "none"> (status: <status>)
-Last recorded action: <action> at <timestamp>
-Detected since last session: <list of git changes or "none">
-Next: <skill-name>
-═══════════════════════════════════════════════
+Routing: <skill or action>
+Active phase: <slug>
+Active increment: <slug or "none">
+Reason: <one-line>
 ```
 
-Then invoke the next skill (orchestration skills are invoked by loading their SKILL.md and proceeding through their steps; subagent skills are invoked via the Task tool with the manifest constructed per the subagent's definition).
+## Edges
 
-## Halt triggers
-
-| Trigger ID | Condition | Route-to |
-| --- | --- | --- |
-| T-SR-1 | Pinned skill version not reachable | human |
-| T-SR-2 | `INDEX.md` missing or malformed | `project-init` (if missing) or human (if malformed) |
-| T-SR-3 | Undocumented `develop` commits detected (commits not traceable to an increment branch) | human (require corrective-increment backfill) |
-| T-SR-4 | Last halt unresolved AND its route-to skill cannot be invoked | human |
-| T-SR-5 | Git state and INDEX state diverge in ways step 4's rules can't reconcile | human |
-| T-SR-6 | Two active increments detected (workflow invariant violation) | human |
-| T-SR-7 | Staged skill diff application produced malformed file at step 4.5 | revert; halt to human; requires re-synthesis at next phase-retrospective |
+- Pin mismatch → halt with override/rollback options.
+- Undocumented `develop` commits → halt; route to corrective-increment backfill or ask the human to clarify.
+- INDEX corruption (parse failure, contradictory state) → halt to human.
+- Git unavailable or repo state unreadable → halt to human (environment issue).
 
 ## Observations to surface
 
-Surface as `routine` per `_meta` §10 whenever:
-- Pin re-validation took notably long or required network retries.
-- Git scan found commits that fit a pattern not in the routing table (a new pattern the workflow should learn).
-- An increment was closed at the same time `phase-close` should have triggered, but routing went to `phase-close` cleanly only because of step ordering — surface as a robustness observation.
-
-Surface as `critical` per `_meta` §10 whenever:
-- Two active increments are detected (T-SR-6) — workflow integrity violation.
-- A halt entry references a skill that no longer exists in the skills repo.
-
-## Step summary template
-
-```
-Skill: session-resume
-Status: success | halt
-Files written: INDEX.md (updated)
-Grounded in: workflow.md, INDEX.md, skill-versions.lock, git state
-Next: <skill-name>
-Observations: <list>
-```
-
-End of `session-resume/SKILL.md`.
+INDEX drift detected and corrected (signal: a prior session crashed or was interrupted before recording a state change); recurring pin mismatches (signal: the dotfiles repo and project are versioning out of sync).

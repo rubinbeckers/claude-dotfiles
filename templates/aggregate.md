@@ -3,46 +3,57 @@
 ```markdown
 ---
 id: agg-NNN-<slug> | TBD-<slug>
-name: <name>
-status: proposed | accepted | superseded | deprecated
+name: <human-readable name>
+summary: <one-line, ≤120 chars; what this aggregate represents and its primary responsibility>
+status: proposed | accepted | superseded | deprecated | withdrawn
 introduced_in: <phase-slug>
 accepted_at_gate: null | gate-1@<phase-slug>
-superseded_by: null
-supersedes: null
-data_classification: public | internal | confidential | restricted
+superseded_by: null | agg-NNN-<slug>
+supersedes: null | agg-NNN-<slug>
 ---
 
 # Aggregate: <name>
 
 Grounded in:
-  - <capabilities that introduced this aggregate>
+  - <capability references that involve this aggregate>
   - <prior aggregate if superseding>
+  - <related DRs>
 
-## Aggregate root
+## Description
 
-<Entity name> — <one-line description>
+<One paragraph describing the aggregate's responsibility — what state it owns, what operations change that state.>
+
+## Root entity
+
+<Name of the root entity and its key attributes.>
 
 ## Entities
 
-- <Entity name>: <description, role>
+- <entity name>: <role within the aggregate>
 - ...
 
 ## Value objects
 
-- <Type name>: <description>
+- <value-object name>: <what it represents>
 - ...
 
 ## Invariants
 
-- <invariant 1: a business rule that must always hold within this aggregate>
+The aggregate enforces these invariants whenever its state changes:
+
+- <invariant 1>
 - <invariant 2>
+
+Cross-context invariants live in `docs/permanent/domain/domain-model.md`, not here.
+
+## Operations
+
+State-changing operations supported by the aggregate root:
+
+- <operation name>: <one-line description; preconditions; postconditions>
 - ...
 
-## Capabilities exercising this aggregate
+## Capabilities involved
 
-- <cap-NNN-<slug>>: <how>
-
-## Cross-aggregate references
-
-- <agg-NNN-<slug>>: <reference type — by-id, snapshot, etc.>
+- <cap-NNN-<slug>>: <how this aggregate participates>
 ```

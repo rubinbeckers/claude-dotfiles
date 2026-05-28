@@ -1,193 +1,84 @@
 ---
 name: project-init
-description: Bootstrap a new project. Use exactly once per project when there is no INDEX.md, no docs/ structure, and no skill-versions.lock. Invoked by session-resume when it detects an uninitialized project, or directly by the human at first session.
+description: Bootstrap a new project. Scaffolds the workflow contract docs, INDEX, doc directory skeleton, and skill-versions.lock. Invoked in a fresh repo with no INDEX.md.
 ---
 
 # project-init
 
-One-time project bootstrap. Creates the directory structure, the initial permanent-doc stubs, the INDEX, the skill-versions lockfile, and the git scaffolding for the develop-branch model.
-
-Runs as an orchestration skill in the main chat. Does not delegate.
+The only skill exempt from the always-allowed-set precondition (`_meta` §1), because its job is to create that set.
 
 ## Inputs
 
-Inherits the always-allowed set (`_meta` §1). Project-init also reads:
-- `workflow.md` (already loaded by `session-resume`)
-- The skills repo (to enumerate available skill and template versions for pinning)
-- Whatever raw input the human provides about the project (name, brief description, tech preferences)
+- The empty (or near-empty) project repo
+- The human's project slug and optional initial raw input for phase 1
+- The dotfiles repo's current tag (used to pin `skill-versions.lock`)
 
 ## Outputs
 
-- `INDEX.md` — initial state, no active phase
-- `skill-versions.lock` — pins for all skills and templates
-- `docs/permanent/` directory tree with stub files
-- `docs/transient/` directory (empty)
-- Git scaffolding: `develop` branch created and checked out
-- `README.md` (project-level, brief — not workflow documentation)
-- `CONTRIBUTING.md` reference to workflow.md
+Everything lands under `docs/`. The project root holds project code, not workflow artifacts.
+
+- `docs/workflow.md`, `docs/agentic-sdlc-principles.md`, `docs/doc-structure.md`
+- `docs/INDEX.md` with project slug, branch config, and an empty phase array
+- `docs/skill-versions.lock` pinned to the dotfiles tag
+- `docs/permanent/` skeleton per `doc-structure.md` (capabilities, aggregates, features, design-specs, flows, architecture, decision-records/DR, decision-records/ADR, domain, design/prototype, design/archive)
+- `docs/permanent/architecture/coding-standards.md`, `testing-standards.md`, `naming-conventions.md` as placeholder docs (the human or the first phase-design fills them in)
+- `docs/permanent/architecture/accepted-debt.md` as an empty file (appended via human disposition at solidifying drain)
+- `docs/permanent/domain/glossary.md` and `docs/permanent/domain/domain-model.md` as empty placeholders
+- `docs/transient/` skeleton
 
 ## Steps
 
-### Step 1 — Verify pre-conditions
+### 1. Confirm preconditions
 
-- No `INDEX.md` exists. If one does, halt with `T-PI-1` (project already initialized).
-- The current working directory is a git repository or can be initialized as one.
-- The skills repo (dotfiles or local) is reachable; `workflow.md` §14.1 dotfiles symlink is in place if used.
+Verify the repo has no `docs/INDEX.md`, no `docs/permanent/`, no `docs/skill-versions.lock`. If any exist, halt — this is not a fresh project; the human should use `session-resume`.
 
-### Step 2 — Gather project metadata from human
+### 2. Gather project metadata
 
-Ask the human (via the chat, not AskUserQuestion — this is a setup conversation):
-- Project name (slug)
-- One-line project description
-- Primary technology stack hint (used for initial coding-standards.md stub, but full TA work happens at phase-1)
-- Whether a dotfiles-symlinked skills repo is in use; if yes, the dotfiles repo path
+Ask the human for:
+- Project slug
+- Operating branch name (default: `develop`)
+- Whether raw input for phase 1 is ready (and if so, where it lives)
 
-Record answers in a temporary `project-init-input.md` to ground subsequent stubs.
+### 3. Write the workflow contract docs
 
-### Step 3 — Initialize git
+Create `docs/` if it doesn't exist. Copy `workflow.md`, `agentic-sdlc-principles.md`, `doc-structure.md` from the dotfiles `templates/` directory to `docs/`. The contract lives with the project so future humans (or agents) opening the project find it alongside the work.
 
-- `git init` if not already a repo.
-- Create and check out `develop` branch.
-- Verify `main` exists (or create from empty); the workflow will never write to `main`.
-- Per `workflow.md` §17: confirm with human that direct-to-main commits will be human-only.
+### 4. Write the doc skeleton
 
-### Step 4 — Create directory structure
+Create the `docs/permanent/` and `docs/transient/` directory trees per `doc-structure.md` §1.
 
-Create the canonical layout (full mapping in `doc-structure.md`):
+Create placeholder `coding-standards.md`, `testing-standards.md`, `naming-conventions.md`, `glossary.md`, `domain-model.md` files (in their respective subdirectories per the layout) with a one-line "this file will be populated during phase-design" comment. These exist so that the always-allowed-read set in `_meta` §1 resolves on day one.
 
-```
-docs/
-  permanent/
-    domain/
-      domain-model.md             (stub, with empty "Cross-context invariants" section per workflow.md §15.7)
-      glossary.md                 (stub)
-      capabilities/
-        INDEX.md                  (empty subtree INDEX per workflow.md §15.8)
-      aggregates/
-        INDEX.md                  (empty)
-    architecture/
-      architecture.md             (stub)
-      database-model.md           (stub)
-      tech-stack.md               (stub)
-      ci-pipeline.md              (stub)
-      coding-standards.md         (stub, seeded by tech-stack hint)
-      testing-standards.md        (stub)
-      naming-conventions.md       (stub)
-      components/
-        INDEX.md                  (empty)
-    features/
-      INDEX.md                    (empty)
-      design-specs/               (empty)
-    flows/
-      INDEX.md                    (empty)
-    design/
-      prototype/                  (empty)
-      design-language/            (empty; optional)
-    ops/                          (empty; populated as project approaches production)
-    process/
-      tag-vocabulary.md           (seeded with the standard categories from templates/tag-vocabulary.md)
-    decision-records/
-      CDR/
-        INDEX.md                  (empty)
-      DDR/
-        INDEX.md                  (empty)
-      FDR/
-        INDEX.md                  (empty)
-      ADR/
-        INDEX.md                  (empty)
-  transient/
-    phases/                       (empty)
-```
+Create `docs/permanent/architecture/accepted-debt.md` as an empty file with just the header from `templates/accepted-debt.md` (the project will append entries via human disposition during solidifying increments).
 
-Every stub file declares its owner role (from `workflow.md` §2) and a "first authoring expected at: phase-1" header. Empty INDEX entries are seeded.
+### 5. Write INDEX
 
-Three architecture stubs are seeded with substantive content (not just placeholders) because they encode discipline the workflow enforces:
+Initialise `docs/INDEX.md` per the `templates/INDEX.md` template, with the project slug and an empty phase array.
 
-**`testing-standards.md` seed** must include:
+### 6. Pin skills
 
-- *Hermeticity requirement.* Every test owns its own data: creates fixtures it needs, asserts, tears down. No test depends on pre-existing data, on the order of test execution, or on side effects of other tests. Tests must run in parallel and in any order. The *property* is what's required; the *mechanism* may be inline (each test does its own setup/teardown) or centralized (a project-wide `beforeEach` + global teardown). Both satisfy the rule (T4).
-- *Clean-state precondition.* Every test starts from a clean state. If centralized setup handles this, individual tests need not duplicate the assertion; if not, each test asserts. Tests that detect dirty state fail fast with a clear message.
-- *Test cadence policy.* Per backlog item: item-scope tests + `@smoke`-tagged regression. Per increment-close: full suite. CI on `develop`: full suite on every push. (Configurable but the default is encoded here.)
-- *Smoke tag criteria.* Apply `@smoke` to a test if any of: (a) it covers a capability with `data_classification ≥ confidential`, (b) it covers a path tagged `@security-critical`, (c) it covers a critical user flow listed in this standard, (d) it is a regression hotspot (test that has failed on `develop` previously). `backlog-test` applies the tag at authoring time; `backlog-review` validates it.
-- *Coverage rules.* ≥80% line coverage on new code (default). Security-critical paths: 100% line + 100% branch on input-validation and error paths.
-- *Critical user flows.* A short list (initially empty; human-curated) of named user flows that always carry `@smoke`. Updated at `improvement-review`.
-- *Framework section.* Project-specific (stub at project-init; populated during phase-1 by TA).
+Write `docs/skill-versions.lock` referencing the dotfiles tag the project will pin to. The human can override the default tag.
 
-**`coding-standards.md` seed** must include: secret-handling rules, logging hygiene (no PII/tokens/sensitive data), error handling discipline, file-organization conventions. Tech-stack-specific details stub at project-init; populated during phase-1.
+### 7. Initial git commit
 
-**`naming-conventions.md` seed** must include: file naming, identifier naming, branch naming (`inc-NNN-<slug>` per workflow.md §17), commit message conventions. Project-specific stub at project-init.
+If the project is in a fresh git repo, commit the scaffold with a message like `chore: project-init v1.1 scaffold`. If the project already has commits, do not commit automatically — surface the staged changes to the human for review.
 
-### Step 5 — Pin skill versions
+### 8. Advance
 
-Read the skills repo. Enumerate all skills and templates currently available. For each, record the version (commit hash if it's a git repo, or a date-stamp if it's filesystem-only). Write `skill-versions.lock`:
-
-```yaml
-# skill-versions.lock
-# Pinned versions of skills and templates for this project.
-# Updates happen at improvement-review (Gate 3) between phases.
-
-dotfiles_repo: <path or "none">
-dotfiles_commit: <hash or "n/a">
-
-skills:
-  session-resume: <version>
-  project-init: <version>
-  # ... etc.
-
-templates:
-  capability: <version>
-  # ... etc.
-```
-
-### Step 6 — Initialize INDEX
-
-Write `INDEX.md`:
-
-```yaml
-# INDEX.md
-project: <name>
-description: <one-line>
-initialized: <ISO timestamp>
-workflow_version: <hash or tag>
-
-active_phase: null
-active_increment: null
-last_action: project-init
-last_action_at: <timestamp>
-
-phases: []
-```
-
-### Step 7 — Initial commit
-
-- `git add` the new structure.
-- `git commit` with message: `chore: project-init bootstrap (workflow vX.Y)`
-- The commit lives on `develop`.
-
-### Step 8 — Status summary
-
-Emit to human:
+If the human provided raw input in step 2 and pointed at its location, invoke `phase-design`. Otherwise, surface a status line:
 
 ```
-═══════════════════════════════════════════════
-Project initialized.
-Name: <name>
-Branch: develop (workflow-managed). main is human-managed.
-Skills pinned: <N> skills, <M> templates.
-Stubs created: <N> permanent doc stubs.
-Next action: provide phase-1 raw input, then invoke session-resume.
-═══════════════════════════════════════════════
+project-init complete.
+Workflow files scaffolded under docs/.
+Provide raw input for phase 1 at docs/transient/phases/01-<slug>/raw-input/, then run session-resume (or "resume").
 ```
 
-## Halt triggers
+## Edges
 
-| Trigger ID | Condition | Route-to |
-| --- | --- | --- |
-| T-PI-1 | INDEX.md already exists | human |
-| T-PI-2 | Cannot initialize git (no permissions, etc.) | human |
-| T-PI-3 | Skills repo not reachable for pinning | human (fix repo access, retry) |
-| T-PI-4 | Required human input not provided | human (re-prompt) |
+- Repo not empty (existing INDEX, docs/) → halt; redirect to `session-resume`.
+- Dotfiles tag not reachable (skill-versions.lock would resolve to nothing) → halt with environment fix instructions.
+- Workspace permissions don't allow writes → halt to human.
 
-## Observations
+## Observations to surface
 
-This skill rarely produces observations (it runs once). Surface as `routine` if any stub creation seems redundant (signal that the template structure could be simplified).
+Recurring missing-input issues during init (signal: the project-init prompt may need more upfront questions); placeholder standards docs never being filled in by phase 1 (signal: phase-design should produce them as part of its outputs).

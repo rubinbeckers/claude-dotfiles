@@ -1,173 +1,199 @@
 ---
 name: increment-close
-description: Close an increment after all backlog items are delivered. Runs scoped doc-consolidation and integrity sweep, assigns final numbers to TBD records, surfaces proposed permanent-doc deltas, halts at implicit gate for human merge.
+description: Closes an increment. Runs full regression, doc-integrity sweep, Gate 3 for consolidation, commits to the increment branch, opens PR to develop, and then continues running while the increment is in `awaiting-merge` to handle post-merge fix requests inline. Invoked by increment-execute on PASS.
 ---
 
 # increment-close
 
-Closes an increment. Consolidates scoped transient content into permanent docs (via `doc-consolidator`), runs a scoped `doc-integrity` sweep, resolves all TBD decision-record numbers, surfaces proposed deltas, then halts at the implicit gate for the human to merge.
-
-Runs as an orchestration skill in the main chat. Invokes utility sub-skills per the carve-out in `_meta` §6.
+Two phases in one skill: the pre-PR close (regression, integrity, consolidation, PR open) and the post-PR continuation (handling fix requests inline until the increment advances to `closed`).
 
 ## Inputs
 
-- INDEX (with current active increment, all backlog items marked done)
-- All transient docs under `docs/transient/phases/<phase-slug>/increments/<inc-slug>/`
-- Permanent docs (read-only at this step; deltas are proposed)
-- Always-allowed set (`_meta` §1)
+- INDEX (active increment, all cycles complete)
+- All transient docs for the increment
+- Accepted permanent docs (read-only at the close phase)
+- Always-allowed set
 
 ## Outputs
 
-- `docs/transient/phases/<phase-slug>/increments/<inc-slug>/consolidation-proposed.md`
-- `docs/transient/phases/<phase-slug>/increments/<inc-slug>/integrity-report.md`
-- TBD decision records assigned final numbers
-- INDEX updated: increment status flips to `closing`, then `awaiting-merge`
+- Regression run results in `progress.md`
+- `consolidation-proposed.md` and `integrity-report.md`
+- Approved doc deltas applied to permanent artifacts
+- Commits to the increment branch
+- PR opened to `develop`
+- Post-merge: fix branches created and merged as needed
+- INDEX updates per state transition (closing → awaiting-merge → closed)
 
-## Steps
+## Steps (pre-PR)
 
-### Step 1 — Verify pre-conditions
+### 1. Verify preconditions
 
-- All backlog items in this increment have status `done` in INDEX.
-- No backlog item is in `review-fail` or `develop-in-progress` state.
-- No unresolved halts in this increment's `progress.md` or in `workflow-observations.md` (scoped to this increment).
-- All feedback-inbox entries have a recorded disposition.
+`increment-execute` returned PASS. No backlog/sequencing entry left incomplete. No unresolved halt in `progress.md`. All `feedback-inbox.md` entries have a recorded disposition.
 
-If any pre-condition fails, halt with `T-IC-1` (specific condition cited).
+### 2. Full regression
 
-### Step 1.5 — Full regression run
+Per `workflow.md` §7, run the project's full test suite. Classify failures per §8:
+- **All pass** → step 3.
+- **Spec divergence** in just-delivered work → open a corrective backlog entry within this increment if the failure is local and the increment is still pre-merge (still within scope-of-close); otherwise append to `phase-debt.md`.
+- **Regression** → append to `phase-debt.md` or open corrective increment if severity warrants.
+- **Discovered defect** → append to `phase-debt.md`.
+- **Structural** → halt (`test-infra-broken`); resolve before close can proceed.
 
-Per `workflow.md` §7.2, run the full test suite at increment-close. The per-item loop only ran item-scope + smoke; this is the comprehensive pass.
+Record results in `progress.md`.
 
-```
-Status line: "Running full regression suite at increment-close."
-```
+### 3. Doc-integrity (scoped)
 
-Execute the project's full test suite per `testing-standards.md`. For each failure, classify per §7.1 (spec divergence / regression / discovered defect / structural).
+Invoke utility sub-skill `doc-integrity` (scope: this increment). Cites the utility carve-out per `_meta` §7.
 
-Disposition:
+Checks: references in the increment's outputs resolve; no `TBD-*` IDs survive in accepted artifacts; supersession bidirectional for any records this increment superseded; no accepted record references a withdrawn or deprecated one.
 
-- **All pass:** advance to step 2.
-- **Spec divergence on item that was already marked done:** the just-closed work has a defect that escaped per-item review. Two paths: (a) if the failing test reveals a clear gap in an item still inside this increment's recent scope and the increment hasn't yet flipped to `awaiting-merge`, open a corrective backlog item via §7.1; (b) if the failure crosses increment boundaries or challenges an accepted artifact, append to `phase-debt.md` for the solidifying increment, OR open a corrective increment per §9 if severity warrants.
-- **Regression:** the increment introduced a regression. Append to `phase-debt.md` for solidifying, or open a corrective increment if severity is high.
-- **Discovered defect:** append to `phase-debt.md` for the solidifying increment. Do not open a new backlog item now — the increment is closing.
-- **Structural error:** test infrastructure broken. Halt with `T-IC-6` (resolve before close can proceed).
+Output: `integrity-report.md`.
 
-Record the regression-run results in `progress.md`.
+### 4. Consolidation candidates
 
-### Step 2 — Validate no TBD-* IDs remain
+For each transient artifact in the increment (technical-analysis.md, review.md from each cycle, defects-discovered/*), determine whether it produced content that should update permanent docs. Most increments don't produce new permanent-doc deltas — the proposed artifacts were already promoted at Gate 2. The exception is when post-implementation findings should update a standards doc, a glossary entry, or an architecture doc.
 
-Per `_meta` §8 (updated by M14): increment-level decision records were numbered at Gate 2 acceptance, not here. This step is now a verification rather than an assignment.
+Produce `consolidation-proposed.md` listing any such deltas with their target permanent doc and the proposed change.
 
-Verify no `TBD-*` ID appears in any accepted permanent doc related to this increment. If any do, surface a critical observation — the Gate 2 numbering step failed and this is a workflow defect.
+### 5. Gate 3 — Close approval
 
-(Historical note: prior workflow versions numbered at this step. The shift to gate-time numbering eliminates the rename-everywhere step that lived here.)
-
-### Step 3 — Invoke doc-consolidator (scoped)
-
-Invocation cited under utility-sub-skill carve-out:
-
-```
-Invoking utility sub-skill doc-consolidator (scope: increment <inc-slug>).
-```
-
-`doc-consolidator` walks transient docs in this increment's workspace, reads `feeds-into:` headers, produces `consolidation-proposed.md`. Same pattern as `phase-close` step 2 but scoped to the increment.
-
-### Step 4 — Invoke doc-integrity (scoped)
-
-Invocation cited under utility-sub-skill carve-out:
-
-```
-Invoking utility sub-skill doc-integrity (scope: increment <inc-slug>).
-```
-
-Scoped checks:
-- All references in this increment's outputs resolve.
-- TBD-* IDs fully resolved (step 2).
-- Supersession bidirectional for any records this increment superseded.
-- Withdrawn/deprecated reference checks.
-
-### Step 5 — Surface proposed deltas via structured approval prompt
-
-Emit the increment-close approval prompt per `_meta` §13.3:
+Emit the gate-3 approval prompt per `_meta` §13:
 
 ```
 ═══════════════════════════════════════════════
-APPROVAL REQUIRED — Increment-close consolidation
+APPROVAL REQUIRED — Gate 3 (Increment close)
 Active scope: <phase-slug>/<inc-slug>
 
-Summary of changes proposed:
-  <2–3 sentence summary: how many doc-deltas across which permanent docs;
-   doc-integrity verdict; full-regression result>
+Summary:
+  Regression: <pass/fail summary>
+  doc-integrity: <clean | findings count>
+  Consolidation deltas: <count>
+  Files for review:
+    - progress.md
+    - integrity-report.md
+    - consolidation-proposed.md (if non-empty)
 
-Files for review:
-  - docs/transient/.../consolidation-proposed.md — <N> proposed deltas
-  - docs/transient/.../integrity-report.md — integrity findings (<count critical>, <count routine>)
-  - <regression run summary if any failures>
+PR will open to develop on approval.
 
-To approve all deltas: reply "approve".
-To approve selectively: reply "approve: <list>" (delta IDs).
-To reject some: reply "reject: <list with reasons>".
+To approve: reply "approve" (or "approve with modifications: <notes>").
 To request changes: reply "changes: <list>".
+To reject: reply "reject: <reason>".
 ═══════════════════════════════════════════════
 ```
 
-### Step 6 — Apply approved deltas
+Parse reply:
+- **approve** → step 6.
+- **changes** → apply (typically targeted edits to consolidation deltas or to the increment branch); re-emit.
+- **reject** → resolve the rejection (usually re-running regression or fixing integrity findings); re-emit.
 
-When the human's reply is parsed:
+### 6. Apply consolidation deltas
 
-- Approved deltas: apply edits to permanent docs (orchestrator does this; the human never edits files directly).
-- Rejected deltas: log in INDEX with rejection reason; the source transient content survives for further disposition (typically routes to `phase-debt.md` or `carry-forward/`).
+For each approved delta in `consolidation-proposed.md`: apply to the target permanent doc. Track in INDEX: `delta_applied: <id>`. Rejected deltas log with reason; their source transient content survives for further disposition.
 
-### Step 7 — Commit to increment branch
+### 6.5. Solidifying-increment debt truncation
 
-Commit all approved deltas to the increment branch (`inc-<NNN>-<slug>`). The commit message references the increment slug:
+If this is the solidifying increment (per the phase-plan row's `type: solidifying`): truncate `phase-debt.md` to empty after the increment's `included` entries have been delivered. The log was already drained at `increment-design` step 2 (each entry dispositioned to `included` / `deferred` / `accepted`); included entries are now delivered as part of this increment's diff, so the log file is rewritten with a `# Phase debt: <phase-slug>` header and an empty entries section.
+
+Any new debt entries that arose during this increment's execution (uncommon, but possible from the increment's own regression findings) go to `docs/transient/phases/<phase>/carry-forward/deferred-debt.md` instead of back into the truncated log.
+
+For non-solidifying increments, this step is a no-op.
+
+### 7. Commit to the increment branch
+
+Commit all changes — implementation, tests, applied deltas, transient artifacts — with a structured message:
 
 ```
-chore(<inc-slug>): increment-close consolidation
-- Approved <N> permanent-doc deltas
-- Resolved <M> TBD records
-- doc-integrity: clean
+feat(<inc-slug>): <one-line summary>
+
+Delivered:
+  - <feature/scenario summaries>
+Files: <count> created, <count> modified
+Tests: <unit count> + <integration/UI count>; coverage <X>%
+Decisions: <DR IDs> | <ADR IDs>
 ```
 
-### Step 8 — Halt at implicit gate (merge)
+### 8. Open PR
+
+Open a PR from the increment branch to `develop`. Title and description summarise the increment.
 
 Status line:
 
 ```
 ═══════════════════════════════════════════════
-Increment <inc-slug> ready for merge.
-PR target: develop
-Files changed: <summary>
-Doc-integrity: <clean | findings list>
+PR opened: <url>
+Target: develop
+Files changed: <count>; +<additions> / -<deletions>
+Tests added: <count>
 
-Human action required: review the PR on develop and merge.
-The workflow will resume at the next session-resume after merge.
+Awaiting CI + human review on staging after merge.
+Reply with fix requests as needed; reply "approved" or signal acceptance to close the increment.
 ═══════════════════════════════════════════════
 ```
 
-Update INDEX: increment status flips to `awaiting-merge`. The session ends here (or stays idle).
+Update INDEX: `status: awaiting-merge`. The skill continues running (steps 9+) within the same session; if the session ends, `session-resume` picks up here next time.
 
-`session-resume` at the next session detects the merge to `develop` and advances per `workflow.md` §13.
+## Steps (post-PR — handling fixes inline)
 
-## Halt triggers
+### 9. Listen for human input
 
-| Trigger ID | Condition | Route-to |
-| --- | --- | --- |
-| T-IC-1 | Pre-condition failure (backlog incomplete, unresolved halt, etc.) | resolve, re-invoke |
-| T-IC-2 | doc-consolidator halt | resolve, re-invoke |
-| T-IC-3 | doc-integrity critical finding | open corrective increment or resolve in-place if mechanical fix |
-| T-IC-4 | TBD-* ID resolution conflict (e.g., chosen number already in use) | rare; halts to human |
-| T-IC-5 | 3-cycle review exhaustion encountered earlier in the increment, but reached close without corrective-increment trigger | workflow defect (critical), open inline improvement-review |
-| T-IC-6 | Full regression run at step 1.5 hits structural errors (test infrastructure broken) | resolve scaffolding first; may need to halt to `increment-technical-analysis` if pattern recurs |
-| T-IC-7 | Full regression surfaces a critical-severity regression that can't wait for solidifying or corrective increment | inline improvement-review (critical halt); human decides whether to abandon increment, open immediate corrective, or accept-and-rollback |
+While `status: awaiting-merge`, the skill watches the chat for the human's next message. Parse intent:
 
-## Observations
+- **Approval** (any message indicating the work is accepted: "good", "approved", "ship it", "all set", "lgtm", etc.) → step 12.
+- **Fix request** (the human describes a change to make) → step 10.
+- **CI failure report** (the human pastes a CI log or describes a failing build) → step 10 with the CI log added to the next fix's manifest.
+- **Scope-expansion question** (the human raises a substantive issue beyond a fix) → surface the corrective-increment vs next-increment options per `workflow.md` §9; route per decision.
+- **Session ends without input** → next `session-resume` assumes approval (per `session-resume` §5).
 
-Surface as `routine`:
-- Increments where consolidation produced 0 deltas (signal: transient docs not declaring `feeds-into`, or content wasn't worth absorbing).
-- Increments where >3 deltas were rejected (signal: consolidator's synthesis is overshooting).
-- Increments with no observations at all in workflow-observations (signal: skill discipline may have lapsed).
+The skill does not act on ambiguous input — if the message doesn't clearly fit one of these, ask the human to clarify in one short question.
 
-Surface as `critical`:
-- Bidirectional supersession failures.
-- TBD-* IDs found in permanent docs from prior closed increments (numbering rule violation).
+### 10. Handle a fix request
+
+Per `workflow.md` §10:
+
+1. Determine the short slug for the fix (from the human's description, or generate one and confirm).
+2. `git checkout -b fix/<inc-slug>/<short-slug>` from `develop`.
+3. Construct the manifest for `increment-develop` with `mode: fix`:
+   - The human's fix description
+   - The affected code paths (best-effort identification from the description; ask the human to confirm if unclear)
+   - Existing tests touching those paths
+   - The increment-scope (for context only)
+   - CI logs if relevant
+4. Invoke via Task tool.
+5. Parse return:
+   - **success** → step 11.
+   - **scope-expansion** → surface options to the human (absorb into next increment, open corrective increment, override and log as a DR); route per decision.
+   - **halt** → route per entry.
+
+### 11. Push and open fix PR
+
+Push the fix branch. Open a PR to `develop`. Surface:
+
+```
+Fix PR opened: <url>
+Branch: fix/<inc-slug>/<short-slug>
+Changes: <one-line>
+
+Awaiting CI + human validation.
+```
+
+Return to step 9 (listening). If CI fails, the human reports back; the orchestrator re-invokes `increment-develop` in `mode: fix` with the CI log in the manifest, on the same fix branch (commits stack).
+
+### 12. Close the increment
+
+When the human approves (explicitly, or implicitly via session-end + resume without input):
+- INDEX: `status: closed`, `closed_at: <ISO>`.
+- If there's a phase-debt entry for this increment that was deferred during execution and the close approval includes it, ensure it's recorded.
+
+Advance: if this is the last increment in the phase plan, invoke `phase-close`. Otherwise, invoke `increment-design` for the next increment.
+
+## Edges
+
+- Regression structural error → halt; resolve test infrastructure (may need technical-design loopback).
+- Critical regression at full-suite run → halt; human decides to abandon, open immediate corrective, or accept-and-rollback.
+- doc-integrity critical finding → corrective increment or in-place fix.
+- Fix branch CI fails repeatedly with no clear root cause → after 3 attempts, halt to human for diagnostic.
+- Human input that's neither approval nor fix nor recognizable → ask one clarifying question.
+
+## Observations to surface
+
+Increments with no consolidation deltas (signal: nothing learned that should update permanent docs — may be fine, but check); high volume of post-merge fixes per increment (signal: increment-execute review is missing patterns); CI failures of the same type recurring (signal: local test rules diverge from CI rules); ambiguous human input recurring at step 9 (signal: status line at step 8 may need clearer prompting).

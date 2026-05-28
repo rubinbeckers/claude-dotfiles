@@ -1,201 +1,121 @@
 ---
 name: doc-integrity
-description: Utility sub-skill. Validates documentation integrity: references resolve, supersession is bidirectional, statuses are consistent, TBD-* IDs are resolved, withdrawn/deprecated records are not referenced. May only be invoked by close skills (phase-close, increment-close) per _meta §6 utility-sub-skill carve-out.
+description: Utility skill. Validates structural integrity of the docs tree (reference resolution, status transitions, supersession links, withdrawn references, TBD-ID resolution) and regenerates the subtree-INDEX files in the indexed subtrees. Invoked by phase-close, increment-close, and any skill that needs a scoped sweep.
 ---
 
 # doc-integrity
 
-Utility sub-skill. Performs structural checks on the documentation corpus. Invoked by `phase-close` (full sweep) and `increment-close` (scoped sweep). Cited explicitly under the utility-sub-skill carve-out in `_meta` §6.
-
-Does not modify documents (with one narrow exception in §6 below). Produces a report; the calling skill decides what to do with findings.
+The validation and index-regeneration utility. Cited under the utility carve-out per `_meta` §7.
 
 ## Inputs
 
-Determined by `scope` argument from the invoking skill:
-- `scope: full` — all permanent docs, all transient docs, all decision-record INDEXes
-- `scope: increment <inc-slug>` — only the increment's outputs and the permanent docs they reference
-
-Plus always-allowed set (`_meta` §1).
+- Scope parameter (`scope: full | phase:<slug> | increment:<phase>/<inc>`)
+- All docs under `docs/permanent/` and `docs/transient/` within the scope
+- Always-allowed set
 
 ## Outputs
 
-- An integrity-report markdown file at the appropriate transient location
-- A structured findings list returned to the caller per `_meta` §13
+- `integrity-report.md` at a path determined by scope:
+  - `full` → `docs/transient/integrity-report-<ISO>.md`
+  - `phase:<slug>` → `docs/transient/phases/<slug>/integrity-report.md`
+  - `increment:<phase>/<inc>` → `docs/transient/phases/<phase>/increments/<inc>/integrity-report.md`
+- Regenerated `subtree-INDEX.md` files in indexed subtrees (see step 4)
 
-## Checks (in order)
+## Steps
 
-### Check 1 — Reference existence
+### 1. Reference validation and cycle detection
 
-For every `Grounded in:` declaration in scope:
-- Each listed source must exist at the declared path.
-- Each must be readable (not 0 bytes).
+For every spec-bearing artifact within the scope, read its frontmatter and body. Check:
+- Every `Grounded in:` source resolves to an existing artifact.
+- The source is `accepted` (not `withdrawn`, `deprecated`, or `superseded` — the latter is allowed only if `superseded_by:` resolves to an accepted successor and the reference is intentional historical citation).
+- Cross-references in body text to artifact IDs resolve.
 
-For every cross-reference (markdown links to other docs, by-ID references):
-- The target document must exist.
-- If the reference is by ID (`CDR-007`, `ADR-014`), the ID must be present in the target's index.
+Build the directed grounding graph (nodes = artifacts, edges = `Grounded in:` references). Run cycle detection (Tarjan's strongly-connected-components is sufficient; any non-trivial SCC is a cycle). Any cycle is a defect — the append-only / supersession discipline makes cycles structurally impossible in well-formed authoring, so a detected cycle indicates an authoring bug.
 
-Findings: `MISSING_REFERENCE`
+Findings → `integrity-report.md` under "Reference failures" (broken references) and "Grounding cycles" (cycles).
 
-### Check 2 — Reference scope
+### 2. Supersession bidirectionality
 
-For each `Grounded in:` source:
-- The source must be either in the always-allowed set OR within the invoking skill's manifest as declared in its SKILL.md.
-- A skill that grounded in a doc outside its declared manifest is a workflow defect.
+For every artifact with `supersedes:`, verify the named predecessor has `superseded_by:` pointing back. For every artifact with `superseded_by:`, verify the successor has `supersedes:` pointing back.
 
-Findings: `OUT_OF_SCOPE_REFERENCE`
+Findings → "Supersession failures."
 
-### Check 3 — Reference currency
+### 3. Status and ID checks
 
-For each reference target:
-- Status must not be `deprecated` or `withdrawn`.
-- A `superseded` record is referenceable only when the referencing record explicitly notes `supersedes-chain: <list>` for historical context.
+- No `TBD-*` IDs in any accepted artifact within the scope (any survivor is a critical workflow defect — the gate that should have numbered them failed).
+- No accepted artifact references a `withdrawn` or `deprecated` artifact in `Grounded in:` (this is a corruption signal — accepted work shouldn't be grounded in retired material).
+- Status transitions are legal per `_meta` §9 state machine.
+- No `phase-debt.md` entry with `disposition: pending` past a solidifying-increment-design step (the drain protocol in `workflow.md` §9 requires every entry to be dispositioned; a `pending` survivor is a workflow defect).
 
-Findings: `STALE_REFERENCE`
+Findings → "Status / ID failures."
 
-### Check 4 — Supersession bidirectionality
+### 4. Subtree-INDEX regeneration
 
-For every record with `superseded-by: <id>`:
-- The target record must exist.
-- The target record must declare `supersedes: <this-id>` (bidirectional).
+For each indexed subtree, regenerate the `subtree-INDEX.md` mechanically. The indexed subtrees are:
 
-For every record with `supersedes: <id>`:
-- The target record must exist.
-- The target record must declare `superseded-by: <this-id>`.
+- `docs/permanent/domain/capabilities/`
+- `docs/permanent/domain/aggregates/`
+- `docs/permanent/features/`
+- `docs/permanent/features/design-specs/`
+- `docs/permanent/flows/`
+- `docs/permanent/decision-records/DR/`
+- `docs/permanent/decision-records/ADR/`
 
-Findings: `BROKEN_SUPERSESSION`
+For each subtree:
+1. Glob the directory for `*.md` files (excluding `subtree-INDEX.md` itself, `editorial-log.md` siblings, and any directory-level README).
+2. For each file, read frontmatter. Extract: `id` (or `slug`), `status`, `name` (or fallback to first heading), `summary` (the explicit `summary:` field from frontmatter — if absent, fall back to the first line of the `## Description` section, truncated to 120 chars).
+3. Write `subtree-INDEX.md` per the template:
 
-### Check 5 — Status state machine
+```markdown
+# Subtree index: <directory-name>
 
-For every decision record:
-- Status must be one of: `proposed`, `accepted`, `superseded`, `deprecated`, `withdrawn`.
-- If `proposed`: the record must have been created within an active phase or increment (not stranded from a closed phase).
-- If `accepted`: must have a `accepted_at: <timestamp>` and a `approved_at_gate: <gate-id>`.
-- If `superseded`: must have `superseded-by:` and `superseded_at:`.
-- If `deprecated`: must have `deprecated_reason:` and `deprecated_at:`.
-- If `withdrawn`: must have `withdrawn_reason:` and `withdrawn_at:`; status is terminal.
+Regenerated by doc-integrity at <ISO>.
+This file is a derived view. Do not edit by hand — edits are overwritten on regeneration.
 
-Findings: `INVALID_STATUS`, `ORPHAN_PROPOSED`
-
-### Check 6 — TBD-ID resolution
-
-For every TBD-* ID in scope:
-- In `docs/permanent/...` (any record with `status: accepted`): must be zero (TBD-* must not appear in any accepted record at any time — they're resolved at gate-acceptance per M14, not at close).
-- In `docs/transient/<phase>/proposed/...` or other transient locations: TBD-* is permitted (records are proposed; numbering happens at gate-acceptance promotion).
-
-Findings: `UNRESOLVED_TBD` (now a critical finding regardless of when discovered — accepted records should never have TBD-*).
-
-### Check 7 — Withdrawn/deprecated reference checks
-
-For every `withdrawn` or `deprecated` record:
-- Scan permanent docs and code for references to its ID.
-- A reference from another accepted record or from code is a finding.
-
-Findings: `REFERENCE_TO_WITHDRAWN`, `REFERENCE_TO_DEPRECATED`
-
-### Check 8 — Feeds-into validity
-
-For every transient doc:
-- If it has a `feeds-into:` header, each target permanent doc must exist (and be appropriate for the content type).
-- If it has no `feeds-into:`, it is marked as scaffolding (eligible for pruning at close without absorption).
-
-Findings: `INVALID_FEEDS_INTO`
-
-### Check 9 — INDEX consistency
-
-For each subtree INDEX (per workflow.md §15.8 — capabilities, aggregates, features, flows, components, each decision-record type):
-- Every file in the subtree must appear as an entry in the INDEX.
-- Every INDEX entry must correspond to an existing file.
-- For decision-record namespaces: number sequence must be gap-free (gaps indicate either deletion, which is forbidden, or numbering errors).
-- For slugged subtrees: ordering follows the convention (status descending, then alphabetical) but is not strictly enforced — drift here is a routine finding, not critical.
-- Every entry's `status:`, `tags:`, `refs:` match what's in the underlying file's frontmatter.
-- Every entry's `refs:` is bidirectional — if entry A lists B in refs, B must list A.
-
-Findings: `INDEX_DRIFT`, `BROKEN_BIDIRECTIONAL_REF`
-
-### Check 10 — Tag vocabulary
-
-For every tag used on any record (in `tags:` fields anywhere — capability specs, feature specs, flow files, ADRs, BDD scenarios, INDEX entries):
-- The tag must be defined in `docs/permanent/process/tag-vocabulary.md`.
-- Undefined tag usage halts during workflow runs; at integrity-sweep time, undefined tags are surfaced as critical findings.
-
-Findings: `UNDEFINED_TAG`
-
-### Check 10 — Rename-detection auto-fix (narrow)
-
-The one modification authorized in doc-integrity: exact-rename references can be auto-fixed.
-
-Detection: if a file was renamed within the increment (detected via `git diff --name-status`) AND references to the old path resolve to a unique new path:
-- Update the references.
-- Log the auto-fix in the integrity report under `AUTO_FIXED`.
-
-Heuristic similarity matches are **not** auto-fixed. If a reference is broken and there's no exact-rename evidence, surface as `MISSING_REFERENCE`.
-
-## Severity classification
-
-```
-CRITICAL (must resolve before close):
-  - BROKEN_SUPERSESSION
-  - INVALID_STATUS
-  - UNRESOLVED_TBD in permanent docs
-  - REFERENCE_TO_WITHDRAWN or REFERENCE_TO_DEPRECATED from accepted records or code
-  - INDEX_DRIFT
-
-ROUTINE (surface but do not block close):
-  - MISSING_REFERENCE in transient docs (may be expected during draft)
-  - STALE_REFERENCE where supersedes-chain note is missing but not strictly required
-  - INVALID_FEEDS_INTO (signals consolidation will fail; should fix but not blocker)
-  - OUT_OF_SCOPE_REFERENCE in transient (signals manifest discipline gap; routine for now)
+| ID | Status | Name | Summary |
+|---|---|---|---|
+| <id> | <status> | <name> | <summary, ≤120 chars> |
+| ... |
 ```
 
-## Output format
+Sort by `id` ascending. Include all statuses (proposed, accepted, superseded, deprecated, withdrawn) so the index is a complete directory map.
 
-```
-# Doc-integrity report
-Scope: <full | increment <slug>>
-Run at: <timestamp>
+If a file in the directory has no readable frontmatter or no `id`/`slug`, flag it under "Index regeneration failures" and skip it in the index. The artifact's authoring skill is responsible for the fix.
 
-## Summary
-- Critical findings: <count>
-- Routine findings: <count>
-- Auto-fixed: <count>
+### 5. Cross-reference invariants
 
-## Findings
-### CRITICAL
-- type: BROKEN_SUPERSESSION
-  record: ADR-014
-  detail: declares superseded-by: ADR-022, but ADR-022 does not declare supersedes: ADR-014
-  location: docs/permanent/decision-records/ADR/ADR-014-currency-handling.md
+Per `workflow.md` §14:
+- Every accepted feature references at least one accepted capability.
+- Every accepted capability references at least one accepted aggregate where applicable.
+- Every accepted DR or ADR is referenced by at least one artifact within the phase that introduced it, or it's deprecated.
+- Every accepted code change references the increment it was built for (via the increment-scope's `Grounded in:` chain — verified at the increment level, not per file).
 
-### ROUTINE
-- type: STALE_REFERENCE
-  source: docs/permanent/features/feature-invoicing.md
-  reference: CDR-007 (status: superseded)
-  detail: reference lacks supersedes-chain note
+Findings → "Invariant failures."
 
-## Auto-fixed
-- type: RENAME
-  from: docs/permanent/capabilities/cap-invoicing.md
-  to: docs/permanent/capabilities/cap-007-invoicing.md
-  updated_references_in: <list of files>
-```
+### 6. Write integrity-report.md
 
-## Halt triggers
+Sections:
+- **Reference failures**
+- **Grounding cycles**
+- **Supersession failures**
+- **Status / ID failures**
+- **Invariant failures**
+- **Index regeneration failures**
+- **Critical findings** (a subset of the above that warrant immediate halt — bidirectional supersession breaks, TBD-* in accepted artifacts, references to withdrawn from accepted, any grounding cycle)
+- **Routine findings** (everything else)
 
-`doc-integrity` rarely halts on its own — it surfaces findings to its caller, which decides. It halts only when the corpus is so broken that scanning is impossible (e.g., INDEX.md unreadable, scope argument invalid).
+If no findings, the report contains a single line: `Integrity: clean.`
 
-| Trigger ID | Condition | Route-to |
-| --- | --- | --- |
-| T-DI-1 | Invalid scope argument | caller (re-invoke with valid scope) |
-| T-DI-2 | INDEX file unreadable | human |
-| T-DI-3 | Files appear/disappear during scan (active concurrent modification) | retry once, then halt to human |
+### 7. Return
 
-## Observations
+Structured return per `_meta` §4. `key_findings` summarises critical count, routine count, and indexed subtrees regenerated.
 
-Surface as `routine`:
-- Patterns of findings clustered by skill (signal: that skill's discipline needs reinforcement).
-- Findings consistently auto-fixed via rename (signal: rename-detection is doing useful work; track for stats).
-- Findings consistently produced by a specific template (signal: template needs revision).
+## Edges
 
-Surface as `critical`:
-- A finding type that doesn't fit any defined category (workflow-curator should add a new check type).
-- INDEX_DRIFT detected (workflow invariant violation; integrity model is failing somewhere).
+- A subtree has no files at all → not a failure; write an empty index with a "Subtree empty" line.
+- File frontmatter unparseable → flag as a regeneration failure; don't halt; the artifact's authoring skill is responsible.
+- A regenerated index would conflict with a hand-edit (e.g., the previous index has hand-added comments) → overwrite anyway; log a warning. The convention is that the index is derived.
+
+## Observations to surface
+
+Recurring reference failures clustered to a specific doc type (signal: template's `Grounded in:` discipline is lapsing); recurring supersession failures (signal: the agent or skill that supersedes isn't writing both sides of the link); subtrees regenerating with files missing required frontmatter fields (signal: a template field is being skipped during authoring).

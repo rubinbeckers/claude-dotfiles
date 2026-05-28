@@ -1,198 +1,128 @@
 # Minor templates
 
-Smaller templates used by orchestration skills. Combined here for compactness.
+Small templates used inline by skills. Collected here to avoid proliferating tiny files in the templates/ directory.
 
----
+## Editorial log
 
-## phase-scope.md
-
-Used by `phase-start`. Captures the phase's intent before BA and TA run.
+A sibling `editorial-log.md` next to an accepted artifact records typo / formatting / link / capitalisation / whitespace changes made in place (per `_meta` §8 and `doc-structure.md` §8). Semantic changes are supersession, not editorial.
 
 ```markdown
-# Phase scope: <phase-slug>
+# Editorial log: <artifact-path>
 
-feeds-into:
-  - (none — phase-scope is reflected in phase-plan and pruned at improvement-review)
+- timestamp: <ISO>
+  by: <human-identifier or skill name>
+  scope: typo | formatting | link | capitalization | whitespace
+  description: <one-line>
 
-Grounded in:
-  - docs/transient/phases/<phase-slug>/raw-input/<files>
-
-## Objective
-<paragraph>
-
-## Capabilities expected (high-level, refined by BA)
-- <name or description>
-- ...
-
-## Architecture concerns expected (high-level, refined by TA)
-- <area or concern>
-- ...
-
-## Out of scope (explicit)
-- <item>
-
-## Prototype handling outcome
-- Case: A | B | C
-- Files: <list>
-- Recorded FDR/CDR: <id or "none">
-- Risk acceptances (for case C): <list of capabilities accepted without prototype>
+- timestamp: <ISO>
+  by: ...
+  ...
 ```
 
----
+## Pause record
 
-## phase-retrospective.md
-
-Output of the `phase-retrospective` skill. Format is fully specified in `phase-retrospective/SKILL.md` step 5; that specification is the canonical template.
+Written by `project-pause` at `docs/transient/pauses/<ISO>.md`.
 
 ```markdown
-# Phase retrospective: <phase-slug>
+# Pause: <ISO>
 
-feeds-into:
-  - (synthesis target — content absorbed via approved skill diffs at improvement-review; this transient doc is archived)
+Active phase: <slug or "none">
+Active increment: <slug or "none">
+Last completed skill: <name>
+Next expected skill: <name>
 
-Grounded in:
-  - workflow-observations.md
-  - standards-observations.md
-  - all halt entries this phase
+Outstanding items:
+  - <halt or unresolved gate>
+  ...
 
-## Delivery summary
-<see phase-retrospective/SKILL.md>
+Hand-off note:
+  <human's note, or "none">
 
-## Workflow defects synthesized
-<list>
-
-## Standards adequacy
-<list>
-
-## Singletons logged
-<list>
-
-## Halts surfaced (resolution summary)
-<list>
-
-## Open questions
-<patterns without clear proposed actions>
+Resume by: running session-resume (or "resume").
 ```
 
----
+## Progress log
 
-## consolidation-proposed.md
-
-Output of `doc-consolidator`. Format fully specified in `doc-consolidator/SKILL.md` step 5.
+Per-increment running log appended by `increment-execute`, `increment-close`, and post-merge fix handling. Lives at `docs/transient/phases/<phase>/increments/<inc>/progress.md`.
 
 ```markdown
-# Consolidation proposal
-Scope: increment <slug> | phase <slug>
-Generated: <timestamp>
+# Progress: <inc-slug>
 
-## Summary
-- Transient docs scanned: <N>
-- Eligible: <N>
-- Proposed deltas: <N>
-- Conflicts: <N>
+## Cycle 1 (develop → test → review)
 
-## Proposed deltas
-(see doc-consolidator/SKILL.md for per-delta format)
+- <ISO>: increment-develop started. Manifest: <N> docs.
+- <ISO>: increment-develop returned success. Files: <count>.
+- <ISO>: parent-commit classification: <results>.
+- <ISO>: increment-test started.
+- <ISO>: increment-test returned success. Tests: <unit/int/ui counts>.
+- <ISO>: increment-review started.
+- <ISO>: increment-review verdict: PASS.
 
-## Conflicts
-(see doc-consolidator/SKILL.md for conflict format)
+## Cycle 2 (if applicable)
+
+...
+
+## Increment-close
+
+- <ISO>: full regression — pass.
+- <ISO>: doc-integrity — clean.
+- <ISO>: Gate 3 approved.
+- <ISO>: PR opened — <url>.
+
+## Post-merge fixes (if any)
+
+- <ISO>: fix branch fix/<inc-slug>/<short> opened. Description: <one-line>.
+- <ISO>: fix PR opened — <url>.
+- <ISO>: CI passed; human approved on staging.
+- <ISO>: fix merged.
+
+## Close
+
+- <ISO>: human approved; increment status flipped to closed.
 ```
 
----
+## Defect-discovered spec
 
-## integrity-report.md
-
-Output of `doc-integrity`. Format fully specified in `doc-integrity/SKILL.md` (Output format section). The template is the format in that SKILL.md.
-
----
-
-## pause-summary.md
-
-Used by `project-pause`. Captures enough state for a future human to refresh their context.
-
-**Pruning rule (T9 — canonical).** Pause-summary is created at `project-pause`. Survives session boundaries unconditionally. When the project resumes via `session-resume`, the orchestrator marks the pause-summary for pruning at the next close event (phase-close or increment-close, whichever comes first in the resumed flow). At that close, it's archived alongside other transient docs. This is the single canonical rule; the prior `doc-structure.md` §3.2 wording and `minor-templates.md` wording have been reconciled to this.
+Written by `increment-review` for each Category-C finding at `defects-discovered/<slug>.md`.
 
 ```markdown
-# Pause summary
+# Discovered defect: <slug>
 
-feeds-into:
-  - (none — read by human on resume; pruned manually or at next phase-close)
+logged_at: <ISO>
+source_review: <path to review.md>
+failing_test: <path>
+affected_code: <best-effort path>
+pre_existing: yes | no
+git_history_check: <result from orchestrator>
 
-Paused: <ISO timestamp>
-Active phase: <slug> (status: <status>)
-Active increment: <slug or "none"> (status: <status>)
+## Test output summary
 
-## Where we are
-<2-3 sentences>
+<truncated test output>
 
-## Outstanding halts
-<list, or "none">
+## Proposed defect-fix spec
 
-## Backlog state (if active increment)
-- Delivered: <list>
-- In progress: <slug or "none">
-- Pending: <list>
+<one-paragraph spec for a backlog-style entry to address in the solidifying increment>
 
-## Pending feedback inbox entries
-<list>
+## Proposed size
 
-## To resume
-Run session-resume. Expected next: <skill-name>.
+S | M | L
+
+## Routing
+
+phase-debt (appended at <ISO>)
 ```
 
----
+## Status line patterns
 
-## skill-versions.lock
+`backlog-loop`-style status lines from v1.0 are replaced by these:
 
-Owned by `project-init`; updated by `improvement-review`.
+- `Routing: <skill> (active <scope>; reason: <one-line>)` — emitted by `session-resume`.
+- `Delegating to <agent>: <inc-slug>. Manifest: <doc count>.` — emitted by every orchestration skill on subagent invocation.
+- `<agent> returned. Wrote: <files>. Findings: <summary>.` — emitted on subagent return.
+- `Cycle <K>/3: <step> (develop | test | review).` — emitted by `increment-execute`.
+- `PR opened: <url>. Target: <branch>.` — emitted by `increment-close` step 8.
+- `Fix PR opened: <url>. Awaiting CI + validation.` — emitted by `increment-close` step 11.
+- `Approval received; increment <slug> → closed. Advancing to <next>.` — emitted by `increment-close` step 12.
+- `Phase <slug> closed. <counts>.` — emitted by `phase-close` step 11.
 
-```yaml
-# skill-versions.lock
-# Pinned versions of skills and templates.
-# Updated at improvement-review (Gate 3) between phases.
-# See workflow.md §14 and §14.1.
-
-dotfiles_repo: <absolute path to dotfiles repo or "none">
-dotfiles_commit: <git hash at last pin sync or "n/a">
-
-skills:
-  session-resume: <version-tag or commit-hash>
-  project-init: <version>
-  project-pause: <version>
-  phase-start: <version>
-  phase-planning: <version>
-  phase-close: <version>
-  phase-retrospective: <version>
-  increment-start: <version>
-  increment-planning: <version>
-  increment-close: <version>
-  feedback-triage: <version>
-  improvement-review: <version>
-  doc-integrity: <version>
-  doc-consolidator: <version>
-  workflow-curator: <version>
-  _meta: <version>
-
-agents:
-  phase-business-analysis: <version>
-  phase-technical-architecture: <version>
-  increment-functional-analysis: <version>
-  increment-technical-analysis: <version>
-  backlog-develop: <version>
-  backlog-test: <version>
-  backlog-review: <version>
-
-templates:
-  capability: <version>
-  aggregate: <version>
-  feature: <version>
-  decision-records: <version>
-  phase-plan: <version>
-  increment-scope: <version>
-  backlog-item: <version>
-  feedback-inbox: <version>
-  workflow-observations: <version>
-  standards-observations: <version>
-  INDEX: <version>
-  minor-templates: <version>
-```
+Skills don't need to restate these patterns; this is the canonical list.

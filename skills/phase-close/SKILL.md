@@ -1,132 +1,162 @@
 ---
 name: phase-close
-description: Close a phase. Runs doc-consolidation and integrity sweep, surfaces proposed permanent-doc deltas for human approval, then hands off to phase-retrospective. Invoked by session-resume after the last increment of the phase delivers.
+description: Closes a phase. Runs a full doc-integrity sweep (including subtree-INDEX regeneration), invokes workflow-curator to synthesize observations, surfaces consolidated deltas + skill diffs + standards diffs at Gate 4, applies approved changes (staging critical-path skill diffs for next session), prunes transient docs to archive. Invoked by increment-close when the last increment of the phase advances to `closed`.
 ---
 
 # phase-close
 
-Closes a phase. Consolidates transient docs into permanent ones (via `doc-consolidator`), runs a full `doc-integrity` sweep, surfaces proposed permanent-doc deltas, then advances to `phase-retrospective`.
-
-Runs as an orchestration skill in the main chat. Invokes utility sub-skills per the carve-out in `_meta` §6.
+The end-of-phase consolidation gate. Combines what v1.0 split between `phase-close`, `phase-retrospective`, and `improvement-review` into a single approval cycle.
 
 ## Inputs
 
-- INDEX (with all increments of this phase marked `closed`)
-- All transient docs under `docs/transient/phases/<phase-slug>/`
-- All permanent docs (read-only at this step; deltas are *proposed*, applied at gate)
-- Always-allowed set (`_meta` §1)
+- INDEX (all increments of the phase marked `closed`)
+- All transient docs under `docs/transient/phases/<phase>/`
+- Accepted permanent docs (read-only at this step; deltas are proposed)
+- `observations.md` from the phase
+- `docs/skill-versions.lock`
+- Always-allowed set
 
 ## Outputs
 
-- Proposed permanent-doc deltas in `docs/transient/phases/<phase-slug>/consolidation-proposed.md`
-- `doc-integrity` report at `docs/transient/phases/<phase-slug>/integrity-report.md`
-- INDEX updated: phase status flips to `closing`
+- `integrity-report.md` (full sweep)
+- `curator-summary.md` and proposal files under `skill-diff-proposals/` and `standards-diff-proposals/`
+- Approved deltas applied to permanent docs
+- Approved skill diffs applied to the dotfiles repo (or staged for next session if critical-path)
+- Updated `docs/skill-versions.lock`
+- INDEX updated: phase `status: closed`, transient archived
 
 ## Steps
 
-### Step 1 — Verify pre-conditions
+### 1. Verify preconditions
 
-- All increments listed in the phase plan have status `closed` in INDEX.
-- No `awaiting-merge` increments remain. If any do, halt with `T-PC-1`.
-- No unresolved halts in `workflow-observations.md`. If any, halt with `T-PC-2`.
+All increments in the phase plan have status `closed` in INDEX. No increment is `awaiting-merge` or `abandoned-without-routing`. No unresolved halts in any increment's `progress.md` or in `observations.md` of severity `critical`.
 
-### Step 2 — Invoke doc-consolidator
+### 2. Invoke doc-integrity (full sweep)
 
-Invocation cited under utility-sub-skill carve-out (`_meta` §6):
-
-```
-Invoking utility sub-skill doc-consolidator (scope: phase <phase-slug>).
-```
-
-`doc-consolidator` walks all transient docs in this phase's workspace, reads their `feeds-into:` headers, and produces a proposed-deltas document listing every change to permanent docs. The deltas are *not* applied yet — they go to `consolidation-proposed.md` for human review at the close gate.
-
-Surface the consolidator's return summary.
-
-### Step 3 — Invoke doc-integrity (full sweep)
-
-Invocation cited under utility-sub-skill carve-out:
+Utility carve-out per `_meta` §7.
 
 ```
 Invoking utility sub-skill doc-integrity (scope: full).
 ```
 
-`doc-integrity` performs a full sweep at phase close:
-- Reference validation: every `Grounded in:` source exists, is in scope, and is current.
-- Supersession bidirectionality: every `superseded-by:` has matching `supersedes:` and vice versa.
-- Decision-record status consistency: no `proposed` records remain that should have been numbered or withdrawn.
-- TBD-ID resolution: no `TBD-*` placeholders remain in permanent docs.
-- Withdrawn/deprecated reference check: no accepted record references a withdrawn or deprecated one.
+Full sweep validates references, supersession, statuses, invariants, and regenerates every indexed subtree's `subtree-INDEX.md`. Output: `docs/transient/phases/<phase>/integrity-report.md`.
 
-Surface the integrity report.
+### 3. Invoke workflow-curator
 
-### Step 4 — Surface proposed deltas via structured approval prompt
+Utility carve-out.
 
-Emit the phase-close approval prompt per `_meta` §13.3:
+```
+Invoking utility sub-skill workflow-curator (mode: synthesize, scope: phase <phase>).
+```
+
+Curator reads `observations.md`, filters against the rejection log, and writes proposal files under `skill-diff-proposals/` and `standards-diff-proposals/`. Output: `curator-summary.md`.
+
+### 4. Identify consolidation deltas
+
+Most increments produced no consolidation deltas at close — proposed artifacts are already promoted at Gate 2. But the phase may have accumulated:
+- Standards-doc deltas from observations the curator synthesized.
+- Permanent-doc updates from human-classified feedback entries.
+- New cross-context invariants surfaced during the phase.
+
+Aggregate any such deltas into `docs/transient/phases/<phase>/consolidation-proposed.md`.
+
+### 5. Gate 4 — Phase close
+
+Emit the gate-4 approval prompt per `_meta` §13:
 
 ```
 ═══════════════════════════════════════════════
-APPROVAL REQUIRED — Phase-close consolidation
+APPROVAL REQUIRED — Gate 4 (Phase close)
 Active scope: <phase-slug>
 
-Summary of changes proposed:
-  <2–3 sentence summary: how many doc-deltas, integrity verdict, carry-forward queue size>
+Summary:
+  doc-integrity: <clean | critical count, routine count>
+  Consolidation deltas: <count>
+  Skill/agent diff proposals: <count> (<low/med/high risk distribution>)
+  Standards diff proposals: <count>
 
 Files for review:
-  - docs/transient/phases/<phase-slug>/consolidation-proposed.md — <N> proposed deltas
-  - docs/transient/phases/<phase-slug>/integrity-report.md — integrity findings
+  - integrity-report.md
+  - curator-summary.md
+  - consolidation-proposed.md (if non-empty)
+  - skill-diff-proposals/* (per-proposal decision)
+  - standards-diff-proposals/* (per-proposal decision)
 
-To approve all deltas: reply "approve".
-To approve selectively: reply "approve: <list>".
-To reject some: reply "reject: <list with reasons>".
-To request changes: reply "changes: <list>".
+For each proposal, reply with one of:
+  approve <id>          → apply as-is
+  modify <id>: <notes>  → apply with notes (you'll be asked to edit the diff)
+  defer <id>            → carry forward to next phase
+  reject <id>: <reason> → reject and log
+
+To approve all: "approve all".
+To handle individually: list per-proposal decisions.
 ═══════════════════════════════════════════════
 ```
 
-This is *not* a separate human gate (Gate 3 is improvement-review, after retrospective). It's the consolidation review inside `phase-close`.
+Parse reply. For "approve all", every proposal is approved. For per-proposal decisions, apply each.
 
-### Step 5 — Apply approved deltas
+### 6. Apply approved consolidation deltas
 
-When the human returns:
+For each approved delta in `consolidation-proposed.md`: apply to the target permanent doc. Track in INDEX.
 
-- For each approved delta in `consolidation-proposed.md`: apply to the relevant permanent doc. The skill makes the edit; the human's role was approving the delta, not making the edit.
-- For each rejected delta: log in INDEX with `delta_rejected:` reason; the source transient content is *not* pruned yet (rejected content survives until retrospective resolves it).
-- For integrity findings flagged `critical`: must be resolved before retrospective. Critical findings typically route to a corrective increment per `workflow.md` §9.
+### 7. Apply approved skill/agent diffs (with staging)
 
-### Step 6 — Prune transient content (selective)
+For each approved proposal:
 
-For every transient doc in this phase's workspace:
-- If all its `feeds-into:` declarations have been processed (either applied or explicitly deferred), the doc is eligible for pruning.
-- Pruning happens *after* retrospective and improvement-review, not here. This step just *marks* transient docs as eligible.
+- **High-risk** (targets `_meta`, `session-resume`, `increment-execute`, `workflow-curator`, or any subagent definition): **stage** for next session. Copy the diff to `docs/transient/pending-skill-diffs/<id>.diff` and record in INDEX. `session-resume` applies it before any routing decision in the next session.
+- **Medium/low risk** (all other skills and standards docs): apply now. Invoke `workflow-curator` in `mode: apply` with the proposal IDs.
 
-Mark in INDEX: `transient_pruning_eligible: <list of paths>`.
+For each applied diff in the dotfiles repo, the curator commits with a structured message. For diffs in the project repo (standards docs), commit on the project's `develop` branch.
 
-### Step 7 — Advance to phase-retrospective
+### 8. Update skill-versions.lock
+
+For each applied dotfiles change, the new dotfiles commit hash or tag is the new canonical. Update `docs/skill-versions.lock` in the project to pin to the new version. Commit on `develop`.
+
+### 9. Log rejections and deferrals
+
+- **Rejected proposals**: append to `rejection-log.md` in the dotfiles repo with proposal ID, reason, source observations, timestamp.
+- **Deferred proposals**: append to `docs/transient/phases/<phase>/carry-forward/deferred-proposals.md`. The next phase's `phase-design` step relocates carry-forward content.
+
+### 10. Archive the phase
+
+Move `docs/transient/phases/<phase>/` to `docs/transient/archive/<phase>/`. Preserves the audit trail; clears the active tree of working state for the next phase.
+
+### 11. Close the phase
+
+INDEX:
+- Phase `status: closed`.
+- `active_phase: null`.
+- Closed-phase summary recorded (increments delivered, gate decisions, key outcomes).
+- `transient_pruning_eligible:` cleared.
 
 Status line:
 
 ```
-Phase close consolidation complete. Advancing to phase-retrospective.
+═══════════════════════════════════════════════
+Phase <phase-slug> closed.
+Skill/agent diffs applied: <count> (in-session) + <count> (staged for next session)
+Standards diffs applied: <count>
+Transient archived: docs/transient/archive/<phase-slug>/
+
+<if staged diff count > 0:>
+⚠ <N> high-risk skill/agent diff(s) staged at docs/transient/pending-skill-diffs/.
+   These are NOT yet active. Run session-resume before proceeding so they apply.
+   If you supply raw input for the next phase in the same session, phase-design
+   will defensively apply them before its first step — but session-resume is the
+   intended entry point.
+
+Next action: provide raw input for the next phase (if any), then run session-resume.
+═══════════════════════════════════════════════
 ```
 
-Update INDEX: phase status flips to `retrospective`. Invoke `phase-retrospective`.
+## Edges
 
-## Halt triggers
+- Increment still `awaiting-merge` → halt; route to that increment-close to finish first.
+- doc-integrity reports critical findings → halt to human (likely opens a corrective increment).
+- Staged diff fails to apply at next session-resume → re-synthesize at that point (handled by session-resume).
+- Applied diff produces a malformed skill or standards doc → revert; halt to human.
+- All proposals rejected (no improvements adopted) → continue; surface a warning that the phase's signal was discarded.
 
-| Trigger ID | Condition | Route-to |
-| --- | --- | --- |
-| T-PC-1 | Increment in `awaiting-merge` state | human (merge or abandon increment first) |
-| T-PC-2 | Unresolved halt in workflow-observations | resolve halt first, then re-invoke |
-| T-PC-3 | doc-integrity reports `critical` finding requiring corrective increment | open corrective increment per workflow.md §9 |
-| T-PC-4 | Human rejects all deltas (substantive consolidation disagreement) | re-run prior increment(s) consolidation or open corrective increment |
-| T-PC-5 | doc-consolidator halts (e.g., feeds-into target doc doesn't exist) | resolve, then re-invoke |
+## Observations to surface
 
-## Observations
-
-Surface as `routine`:
-- Transient docs that consistently produce no consolidation deltas (signal: the doc may be permanent-track candidate, or it's working scaffold that doesn't need feeds-into).
-- High volume of rejected deltas (signal: doc-consolidator's synthesis quality should be reviewed).
-- Integrity findings clustered around a specific doc type (signal: that template's discipline needs reinforcement).
-
-Surface as `critical`:
-- Integrity findings indicating bidirectional supersession failures (workflow invariant violated).
-- TBD-ID found in a permanent doc that's not from the just-closed increment (numbering rule violation across increments).
+Phases with no proposals at all (signal: observations aren't being surfaced, or the curator's threshold is too tight); phases where the consolidation produced 0 deltas (signal: nothing was learned during execution that fed back, or the observation channel didn't reach worthy content); high deferral rate (signal: the human isn't engaging with improvements at this gate).

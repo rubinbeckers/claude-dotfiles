@@ -1,157 +1,115 @@
 ---
 name: workflow-curator
-description: Utility sub-skill. Synthesizes observation patterns into proposed skill diffs; applies approved diffs to the skills repo. Two modes - synthesis (invoked by phase-retrospective) and apply (invoked by improvement-review). May only be invoked by these skills per _meta §6 utility-sub-skill carve-out.
+description: Utility skill. Synthesizes accumulated observations into proposed diffs to skills, agents, and standards docs. Invoked by phase-close.
 ---
 
 # workflow-curator
 
-Utility sub-skill with two modes:
+The observation-to-improvement synthesizer. Cited under the utility carve-out per `_meta` §7.
 
-- **synthesis mode** — invoked by `phase-retrospective`: reads observation patterns, constructs concrete skill-diff proposals.
-- **apply mode** — invoked by `improvement-review`: applies approved diffs to the skills repo (potentially the dotfiles symlinked repo).
+## Inputs
 
-Cited explicitly under the utility-sub-skill carve-out in `_meta` §6.
+- `docs/transient/phases/<phase>/observations.md` (all entries from the phase)
+- Prior `rejection-log.md` from the dotfiles repo (so already-rejected patterns aren't re-proposed)
+- Always-allowed set
 
-Does not modify skill files in synthesis mode; only in apply mode after human approval.
+## Outputs
 
-## Inputs (synthesis mode)
+- `docs/transient/phases/<phase>/skill-diff-proposals/<id>.diff` per proposed skill or agent change
+- `docs/transient/phases/<phase>/standards-diff-proposals/<id>.diff` per proposed standards change
+- Synthesis summary in `docs/transient/phases/<phase>/curator-summary.md`
 
-- `workflow-observations.md` (current phase)
-- `standards-observations.md` (current phase)
-- All halt entries this phase
-- All skill SKILL.md files (read-only, for diff construction)
-- `.claude/skills/_meta/SKILL.md` (read-only)
-- Past `rejection-log.md` entries (to avoid re-proposing patterns already rejected)
-- Always-allowed set (`_meta` §1)
+## Steps
 
-## Inputs (apply mode)
+### 1. Cluster, then read selectively
 
-- Approved diff files (annotated with `decision: approve`)
-- The target skill or standards files (read-write)
-- Skills repo location (`.claude/skills/`, `.claude/agents/` — possibly symlinked to dotfiles)
-- `skill-versions.lock` (read-write)
+Observations accumulate at scale (a long-running project may produce hundreds per phase). Loading every full entry up front is wasteful and degrades synthesis as the pile grows.
 
-## Outputs (synthesis mode)
+Do a two-pass read:
 
-- Diff files at `docs/transient/phases/<phase-slug>/skill-diff-proposals/<id>.diff`
-- Diff files at `docs/transient/phases/<phase-slug>/standards-diff-proposals/<id>.diff`
-- A summary at the same location
+1. **Summary scan first.** Iterate `observations.md` reading only each entry's `category`, `severity`, `pattern`, and `timestamp`. Cluster by `category` × similar `pattern` (string similarity is fine).
+2. **Selective full read.** For each cluster, load full entries only if: (a) the cluster has ≥3 occurrences across the phase, OR (b) any entry in the cluster carries `severity: critical`, OR (c) the cluster matches an open carry-forward proposal from a prior phase. Singletons of `severity: routine` without matching patterns are surfaced in the curator summary but not turned into proposals — the threshold for proposing is "pattern has reoccurred or is critical."
 
-## Outputs (apply mode)
+This keeps the curator's context bounded as the project grows and prevents low-signal entries from drowning real patterns.
 
-- Modified skill / agent / standards files
-- Updated `skill-versions.lock`
-- Commits to the dotfiles repo (if symlinked) or project repo (if local)
-- Updated `rejection-log.md` (for rejected diffs)
+### 2. Filter against rejection log
 
-## Synthesis mode steps
+For each clustered pattern, check the rejection log: has this same pattern been rejected in a prior phase? If yes, surface only with new occurrences flagged `human_confirmed: true`, or skip — don't re-propose what's been rejected unless there's new evidence.
 
-### S1 — Read all observations and halts
+### 3. Synthesize proposals
 
-Collate. Each observation has a `pattern:` field. Each halt has a `reason:` field and a `route_to:` field.
+For each cluster the rejection-log filter leaves, propose a concrete diff:
 
-### S2 — Group by pattern
+- **category: workflow-defect** → diff to the affected skill's SKILL.md, or to `_meta`, or to a new skill if the pattern indicates a gap.
+- **category: standards-coding / standards-testing / standards-naming** → diff to the relevant standards doc.
+- **category: other** → surface as an open question; the human classifies at the gate.
 
-Identify clusters. The rules (per `agentic-sdlc-principles.md` §7.7, with T5 thresholds tuned for solo-mode realism):
-- Synthesize a proposal when pattern has ≥2 occurrences in this phase, OR ≥3 occurrences across the last 3 phases (cross-phase counting per T5), OR ≥1 occurrence flagged `critical`, OR ≥1 occurrence flagged `human-confirmed`.
-- Check `rejection-log.md`: if this pattern was rejected in a prior phase with the same proposed fix, do not re-propose unless new evidence accompanies it (e.g., severity escalated, new occurrence type, additional occurrences since last rejection).
+Each proposed diff is a real unified diff (with `--- a/<path>` and `+++ b/<path>` headers) so it can be applied mechanically on approval.
 
-### S3 — Identify target file(s) per cluster
+### 4. Assess risk per proposal
 
-For each cluster, decide:
-- Which file should change (`workflow.md`, `_meta/SKILL.md`, a specific skill's SKILL.md, an agent definition, a standards doc).
-- What kind of change (add a halt trigger, refine a manifest, add a step, add an observation type, add a standard).
+For each proposal, assign a risk level:
+- **low**: edit to standards docs, observation surfacing changes, comment-only changes in skills.
+- **medium**: behavioural changes to a non-critical-path skill.
+- **high**: changes to `_meta`, `session-resume`, `increment-execute`, `workflow-curator` itself, or any subagent definition.
 
-If the cluster's pattern doesn't map cleanly to a single target, the proposal is flagged as `open-question` (no concrete diff; surfaces for human discussion).
+High-risk changes get the staging treatment at `phase-close` step (next session applies them before routing).
 
-### S4 — Construct the diff
+### 5. Write proposals
 
-For each cluster with a clear target:
-- Construct a unified diff against the target file.
-- The diff must be minimal: the smallest change that addresses the pattern.
-- The diff includes a rationale comment in the diff header.
-- The diff includes the source-observation IDs.
-
-Example diff structure:
-```
---- a/.claude/skills/increment-functional-analysis/SKILL.md
-+++ b/.claude/skills/increment-functional-analysis/SKILL.md
-@@ -45,6 +45,12 @@ Halt with T-FA-3 if a referenced design-spec doesn't exist.
- 
-+## Halt trigger: glossary-term not in scope
-+
-+T-FA-7: A capability's spec introduces a domain term not present in glossary.md.
-+Per _meta §2 (non-assumption), do not author the term silently.
-+Route to: phase-business-analysis loopback (Gate 1 re-pass).
-+
- ## Inputs
-```
-
-Synthesized from observations: obs-2026-05-20-001, obs-2026-05-22-014, obs-2026-05-23-007 (3 occurrences, pattern: "FA halted attempting to use undefined term")
-
-### S5 — Risk classification per proposal
-
-Each proposal carries a risk level:
-- **low**: adding a halt trigger or observation type that doesn't affect existing behavior
-- **medium**: modifying an existing step or manifest in ways that could affect halts or outputs
-- **high**: changing meta-rules (`_meta`, `workflow.md`), restructuring multi-skill interactions
-
-### S6 — Write proposals
-
-Each proposal is a separate file. Plus a summary index listing all proposals with their risk and source observations.
-
-## Apply mode steps
-
-### A1 — Read approved diffs
-
-Filter to those annotated `decision: approve` (or `decision: modify` — human has already edited the diff to its final form).
-
-### A2 — Apply each diff
-
-For each diff:
-- Re-read the target file (it may have changed since synthesis).
-- Apply the diff using `patch` (or equivalent reliable mechanism).
-- If the diff doesn't apply cleanly, halt with `T-WC-A1` (re-synthesis required).
-- Validate the resulting file is well-formed: SKILL.md frontmatter parses, no syntax errors, markdown sections balanced.
-
-### A3 — Commit
-
-For each applied diff:
-- If the target is in the dotfiles repo: commit there with structured message.
-- If the target is project-local: commit on the project's `develop` branch.
+For each proposal, write a `.diff` file at the path above with a header block:
 
 ```
-feat(<scope>): <one-line> [phase <phase-slug>, proposal <id>]
+# proposal-id: <id>
+# source-observations: <count>
+# patterns:
+#   - "<pattern 1>"
+#   - "<pattern 2>"
+# risk: low | medium | high
+# rationale: <one-paragraph: why this change addresses the pattern>
 ```
 
-### A4 — Update skill-versions.lock
+followed by the unified diff.
 
-After all diffs apply, if the skills repo is the dotfiles repo:
-- Determine the new commit hash or tag for each modified skill/template.
-- Update `skill-versions.lock` to pin to the new versions.
-- Commit `skill-versions.lock` to the project's `develop` branch.
+### 6. Write curator-summary.md
 
-### A5 — Log rejections
+```
+# Curator summary: <phase>
 
-For each `decision: reject`, write to `rejection-log.md` in the skills repo (or in a project-local rejection store if dotfiles repo isn't writable for some reason). Append entry per `improvement-review` §4.
+Observations processed: <count>
+Patterns identified: <count>
+Proposals generated: <count>
+  - Skill/agent diffs: <count>
+  - Standards diffs: <count>
+Patterns filtered (matched rejection log): <count>
 
-## Halt triggers
+## Proposals
 
-| Trigger ID | Condition | Route-to |
-| --- | --- | --- |
-| T-WC-S1 (synthesis) | A cluster of patterns has no clear target file | caller (surface as open-question in retrospective) |
-| T-WC-S2 (synthesis) | Diff would conflict with another pending diff | merge or surface for human disposition |
-| T-WC-A1 (apply) | Diff doesn't apply cleanly | caller (re-synthesize) |
-| T-WC-A2 (apply) | Resulting file is malformed | caller (revert, re-synthesize) |
-| T-WC-A3 (apply) | Skills repo not writable | human |
-| T-WC-A4 (apply) | Diff modifies a file pinned to a version other than the current dotfiles head | resolve pin first |
+- <id>: <one-line> (risk: <level>)
+- ...
+```
 
-## Observations
+### 7. Return
 
-Surface as `routine`:
-- Patterns rejected ≥3 phases in a row with substantially the same proposal (signal: the proposal generator should learn to deprioritize this pattern).
-- Diffs frequently failing to apply cleanly (signal: synthesis isn't reading current file state).
-- Heavy skewing of changes toward one skill (signal: that skill may need a structural rewrite rather than incremental patches).
+Structured return per `_meta` §4 with the proposal count by category.
 
-Surface as `critical`:
-- Apply-mode failure produces a non-parseable skill file that breaks subsequent session-resume (workflow integrity violation).
+### Apply mode (called by phase-close on approval)
+
+When invoked with `mode: apply` plus a list of approved proposal IDs:
+
+For each ID:
+- Read the proposal file.
+- Apply the unified diff to the target file (in the dotfiles repo if it's a skill/agent, in the project repo if it's a standards doc).
+- Verify the result parses (SKILL.md frontmatter intact, standards doc readable). If not, revert and halt to human.
+- If the target is in the dotfiles repo, commit with `feat(<target>): <one-line summary> [phase <slug>]`.
+- For rejected proposals, append to `rejection-log.md` in the dotfiles repo with reason.
+
+## Edges
+
+- A proposal would touch a file outside the workflow's edit scope (e.g., an .env, a third-party doc) → flag as out-of-scope; don't generate.
+- Two proposals conflict (same file, overlapping diffs) → merge into one or surface both with the conflict explicit; the human picks.
+- Apply-mode finds the target file has changed since proposal generation → halt; re-synthesize with the current state.
+
+## Observations to surface
+
+Patterns rejected three or more times across phases (signal: the synthesis heuristic is wrong, not the observation); proposals never being approved (signal: the pattern threshold for proposing may need raising, or the human disagrees with the synthesis).

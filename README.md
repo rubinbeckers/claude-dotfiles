@@ -1,58 +1,62 @@
-# claude-dotfiles — agentic-SDLC workflow v1.0
+# claude-dotfiles — agentic-SDLC workflow v1.1
 
-Personal dotfiles hosting the skills, subagents, and templates that drive the **agentic-SDLC workflow v1.0** in Claude Code (VS Code extension).
+Personal dotfiles hosting the skills, subagents, and templates that drive the **agentic-SDLC workflow v1.1** in Claude Code.
+
+v1.1 is a leanness pass over v1.0: the develop / test / review loop runs once per increment (not once per backlog item), the four decision-record types collapse to two (DR and ADR), the transient → proposed → permanent file-move staging is replaced by status-in-place, and several skills consolidated. The dev / test agent split — the workflow's core quality lever — is preserved.
 
 ## What's in here
 
 ```
 .dotfiles/
-├── skills/                      → 16 orchestration + utility skills + _meta
-│   ├── _meta/SKILL.md           cross-cutting rules every skill inherits
+├── skills/                      → 12 orchestration + utility skills + _meta
+│   ├── _meta/                   cross-cutting rules every skill inherits
 │   ├── session-resume/          canonical session entry point
-│   ├── project-init/            bootstrap a new project (replaces the old
-│   │                              project-seed/ copy mechanism)
-│   ├── project-pause/
-│   ├── phase-start/             phase lifecycle (start → planning → close →
-│   ├── phase-planning/            retrospective → improvement-review)
-│   ├── phase-close/
-│   ├── phase-retrospective/
-│   ├── increment-start/         increment lifecycle (start → planning →
-│   ├── increment-planning/        backlog-loop → close)
-│   ├── increment-close/
-│   ├── backlog-loop/            per-backlog-item iteration (develop / test /
-│   │                              review delegation + verdict handling)
-│   ├── feedback-triage/
-│   ├── improvement-review/      Gate 3 — human approval of skill diffs +
-│   │                              standards updates
-│   ├── workflow-curator/        utility — synthesizes observation patterns
-│   ├── doc-consolidator/        utility — proposes permanent-doc deltas
-│   └── doc-integrity/           utility — validates ref + supersession +
-│                                  status integrity at close gates
+│   ├── project-init/            bootstrap a new project
+│   ├── project-pause/           clean-handoff pause
+│   ├── phase-design/            phase analytical + planning pass (Gate 1)
+│   ├── phase-close/             phase consolidation + retrospective + improvement (Gate 4)
+│   ├── increment-design/        increment analytical + planning pass (Gate 2)
+│   ├── increment-execute/       develop → test → review loop at increment scope
+│   ├── increment-close/         regression + integrity + PR + post-merge fix handling (Gate 3)
+│   ├── feedback-triage/         utility — dispositions on feedback-inbox entries
+│   ├── doc-integrity/           utility — reference / supersession / status validation; subtree-INDEX regeneration
+│   └── workflow-curator/        utility — synthesizes observations into proposed skill / standards diffs
 │
-├── agents/                      → 7 subagent definitions (NEW in v1.0; old
-│                                  workflow had no agent layer)
-│   ├── phase-business-analysis.md
-│   ├── phase-technical-architecture.md
-│   ├── increment-functional-analysis.md
-│   ├── increment-technical-analysis.md
-│   ├── backlog-develop.md       (TL implementation)
-│   ├── backlog-test.md          (isolated test author)
-│   └── backlog-review.md        (verdict + standards observations)
+├── agents/                      → 5 subagent definitions
+│   ├── domain-design.md         (BA + FA in one; mode-parameterised)
+│   ├── technical-design.md      (TA + TL in one; mode-parameterised)
+│   ├── increment-develop.md     (develop, with mode: increment | fix)
+│   ├── increment-test.md        (test from spec; isolation forbidden-reads section)
+│   └── increment-review.md      (review at increment scope; 3-cycle budget)
 │
-├── templates/                   → 17 doc templates the skills consume
-│   ├── INDEX.md                 project state record schema
-│   ├── capability.md / aggregate.md / feature.md / flow.md
-│   ├── decision-records.md      (CDR / DDR / FDR / ADR — unified spec)
-│   ├── increment-scope.md / phase-plan.md / phase-debt.md
-│   ├── backlog-item.md / feedback-inbox.md / observations.md
-│   ├── tag-vocabulary.md / subtree-INDEX.md / minor-templates.md
-│   └── standards-observations.md + workflow-observations.md
-│                                (deprecated redirects — kept so legacy
-│                                 transient logs still find their home)
+├── templates/                   → doc templates the skills consume
+│   ├── INDEX.md                 project state record
+│   ├── workflow.md              project-level workflow contract (project-init writes to root)
+│   ├── agentic-sdlc-principles.md  (project-init writes to root)
+│   ├── doc-structure.md         (project-init writes to root)
+│   ├── capability.md
+│   ├── aggregate.md
+│   ├── feature.md
+│   ├── design-spec.md
+│   ├── flow.md
+│   ├── decision-record.md       (DR + ADR shared spec, two-type)
+│   ├── increment-scope.md       (includes implementation plan + sequencing)
+│   ├── phase-plan.md
+│   ├── phase-debt.md
+│   ├── feedback-inbox.md
+│   ├── observations.md
+│   ├── subtree-INDEX.md         (derived; regenerated by doc-integrity)
+│   ├── minor-templates.md       (editorial-log, pause-record, progress.md, defect-discovered, status-line patterns)
+│   ├── coding-standards.md      (placeholder; project-init writes; first phase populates)
+│   ├── testing-standards.md     (placeholder; project-init writes)
+│   ├── naming-conventions.md    (placeholder; includes tag vocabulary)
+│   ├── glossary.md              (placeholder)
+│   ├── domain-model.md          (placeholder for cross-context invariants — always-allowed read)
+│   └── accepted-debt.md         (permanent record of debt the team consciously accepted)
 │
 ├── README.md                    this file
 ├── claude.md                    (empty placeholder)
-├── install-claude.ps1           Windows symlink installer (see below)
+├── install-claude.ps1           Windows symlink installer
 └── install-claude.sh            macOS / Linux symlink installer
 ```
 
@@ -62,75 +66,79 @@ Personal dotfiles hosting the skills, subagents, and templates that drive the **
 
 1. **Clone this repo to `~/.dotfiles`.**
 
-   **Windows (PowerShell):**
-   ```powershell
+   Windows (PowerShell):
+   ```
    git clone https://github.com/rubinbeckers/claude-dotfiles.git $env:USERPROFILE\.dotfiles
    ```
 
-   **macOS / Linux (bash, zsh):**
-   ```bash
+   macOS / Linux:
+   ```
    git clone https://github.com/rubinbeckers/claude-dotfiles.git ~/.dotfiles
    ```
 
-2. **Install the symlinks** that expose skills as slash commands and agents as subagents in Claude Code. Both scripts do the same thing — pick the one for your OS.
+2. **Install the symlinks.**
 
-   **Windows (PowerShell):**
-   ```powershell
+   Windows (PowerShell, with Developer Mode enabled or PowerShell run as Administrator):
+   ```
    & $env:USERPROFILE\.dotfiles\install-claude.ps1
    ```
-   > Requires Developer Mode enabled, or run PowerShell as Administrator. Symlink creation on Windows is gated otherwise.
 
-   **macOS / Linux (bash):**
-   ```bash
+   macOS / Linux:
+   ```
    bash ~/.dotfiles/install-claude.sh
    ```
-   > No special privileges needed. `ln -s` is available out of the box.
 
    Either script creates:
-   - `~/.claude/commands/<skill>.md` → symlink to `~/.dotfiles/skills/<skill>/SKILL.md` (16 entries)
-   - `~/.claude/agents/<agent>.md` → symlink to `~/.dotfiles/agents/<agent>.md` (7 entries)
+   - `~/.claude/commands/<skill>.md` → symlink to `~/.dotfiles/skills/<skill>/SKILL.md` (12 entries)
+   - `~/.claude/agents/<agent>.md` → symlink to `~/.dotfiles/agents/<agent>.md` (5 entries)
 
-   Symlinks point at the live files in this repo, so a subsequent `git pull` on the dotfiles propagates without re-running the installer. Re-run only when skills or agents are added / removed / renamed.
+   Symlinks point at the live files in this repo. `git pull` propagates without re-running the installer. Re-run when skills or agents are added / removed / renamed.
 
-3. **Verify access.** When you later run `session-resume` in a project, the orchestrator validates `skill-versions.lock` against the dotfiles tag (default: `workflow-v1.0`); the pin check halts if anything's missing.
+3. **Verify access.** When you run `session-resume` in a project, the orchestrator validates `skill-versions.lock` against the dotfiles tag (default: `workflow-v1.1`).
 
 ### Starting a new project
 
-In a new repo with no `INDEX.md`, no `docs/`, and no `skill-versions.lock`:
+In a new repo with no `docs/INDEX.md`:
 
 1. In Claude Code, open the project. The harness auto-loads the workflow on session start.
-2. Invoke `project-init`. It scaffolds:
-   - `workflow.md`, `agentic-sdlc-principles.md`, `doc-structure.md` at project root
-   - `INDEX.md` (with the project's slug, branch config, first phase placeholder)
-   - `skill-versions.lock` pinned to the current dotfiles tag
-   - `docs/permanent/` + `docs/transient/` skeleton per `doc-structure.md` §2.2 / §3.2
-3. Provide raw input for the first phase. `project-init` then routes to `phase-start`.
+2. Invoke `project-init`. It scaffolds everything under `docs/`: `workflow.md`, `agentic-sdlc-principles.md`, `doc-structure.md`, `INDEX.md`, `skill-versions.lock`, the `permanent/` and `transient/` trees, and placeholder standards docs. The project root holds project code, not workflow artifacts.
+3. Provide raw input for the first phase. `project-init` routes to `phase-design`.
 
 ### Resuming work
 
-Any subsequent session, anywhere in the lifecycle:
+Any subsequent session, anywhere in the lifecycle: type *"resume"* or *"continue"* or any opening that isn't a fresh project bootstrap.
 
-> *"resume"* — or *"continue"* — or any unspecified opening.
+`session-resume` reads `docs/INDEX.md`, validates pins, scans git on the operating branch, parses your opening message, and routes to the correct next skill.
 
-`session-resume` reads `workflow.md`, validates pins, scans git on the project's `operating_branch`, and routes to the correct next skill (per its routing table in `skills/session-resume/SKILL.md`).
+**Post-merge fix handling.** After `increment-close` opens the PR and you merge it, the increment is `awaiting-merge`. If you ask for fixes in the ongoing session, the orchestrator creates a `fix/<inc-slug>/<short-slug>` branch and runs `increment-develop` in `mode: fix`. If you signal approval (or run session-resume with no further input), the increment advances to `closed`.
 
 ## Branch model
 
-| Branch / tag | What it is |
-|---|---|
-| `main` | The canonical workflow-v1.0 install. Default branch. |
-| `pre-v1.0-archive` | Snapshot of the prior (custom) workflow at the v1.0 migration point. Reference only — not for use. |
-| tag `workflow-v1.0` | Stable pin target. `skill-versions.lock` in projects references this tag. |
-| tag `pre-v1.0-migration-2026-05-25` | Local pre-migration snapshot. |
-| tag `pre-v1.0-main-2026-05-25` | Pre-v1.0 origin/main snapshot (includes the old `intake-prep` skill orphaned by the force-push at v1.0 install). |
+| Branch / tag                        | What it is                                                                                                |
+| ----------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| `main`                              | Stable; production-deployable. Workflow does not manage `main`.                                          |
+| `develop`                           | Integration; receives increment PRs.                                                                     |
+| `inc-<NNN>-<slug>`                  | Increment branch; cut from develop at increment-design, merged at increment-close.                       |
+| `fix/<inc-slug>/<short>`            | Post-merge fix branch; cut from develop, merged before the increment advances to `closed`.               |
+| tag `workflow-v1.1`                 | Stable pin target. `docs/skill-versions.lock` in projects references this tag.                           |
 
-## Migrating from a prior workflow
+## Migrating from v1.0
 
-If you have a project running an older custom workflow (skills like `business-analyst`, `developer`, `functional-specifier`, `implementation-planner`, `technical-reviewer`, `ui-test-engineer`, `phase-intake`, `skill-curator`), the migration to v1.0 is a one-shot agent-driven operation. The reference run is documented in the `lcm-agile-assessment-dashboard` project's `migration-2026-05-v1.0/` audit trail.
+If you have a project running v1.0:
+
+1. **Pin the project to its current v1.0 dotfiles tag** before installing v1.1.
+2. Finish the current phase under v1.0 (avoid mid-phase migration).
+3. At phase-close, switch the project's `docs/skill-versions.lock` pin to `workflow-v1.1` (or use the migration prompt at `migration-v1.0-to-v1.1.md` for a one-shot migration).
+4. The first session under v1.1 will run `session-resume`'s pin check; it will detect the migration, halt, and prompt for override or rollback. Choose override; record a DR documenting the migration.
+5. The lifecycle states and INDEX schema are compatible — v1.1 reads v1.0's INDEX. Existing artifacts under `docs/permanent/...` keep their statuses. The `docs/transient/.../proposed/` subdirectories from v1.0 are no longer used; their content (if any) was either promoted or pruned at the prior phase's close, so they should be empty.
+6. Existing CDR / DDR / FDR records keep their IDs but get re-classified as DR. ADRs unchanged.
+
+A migration helper isn't currently part of the workflow; the steps above are manual but tractable.
 
 ## References
 
-- The v1.0 workflow contract: `workflow.md` (at any v1.0-using project's root)
-- The principles this workflow instantiates: `agentic-sdlc-principles.md`
-- Documentation layout: `doc-structure.md`
-- Cross-cutting skill rules: `skills/_meta/SKILL.md`
+- The v1.1 workflow contract: `docs/workflow.md` (at any v1.1-using project)
+- The principles this workflow instantiates: `docs/agentic-sdlc-principles.md`
+- Documentation layout: `docs/doc-structure.md`
+- Cross-cutting skill rules: `skills/_meta/SKILL.md` (in the dotfiles)
+- Migration from v1.0: `migration-v1.0-to-v1.1.md` (in the dotfiles)

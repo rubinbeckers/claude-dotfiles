@@ -4,7 +4,8 @@
 ---
 id: cap-NNN-<slug> | TBD-<slug>
 name: <human-readable name>
-status: proposed | accepted | superseded | deprecated
+summary: <one-line, ≤120 chars; what this capability enables, for whom>
+status: proposed | accepted | superseded | deprecated | withdrawn
 data_classification: public | internal | confidential | restricted
 introduced_in: <phase-slug>
 accepted_at_gate: null | gate-1@<phase-slug>
@@ -15,7 +16,7 @@ supersedes: null | cap-NNN-<slug>
 # Capability: <name>
 
 Grounded in:
-  - <raw input section, prior capability if superseding, related DDRs/CDRs>
+  - <raw-input section, prior capability if superseding, related DRs>
 
 ## Description
 
@@ -35,15 +36,15 @@ Each AC is referenced by ≥1 BDD scenario via `# AC: <id>` comment in feature f
 
 ## Cross-context invariants involved
 
-(Optional — list cross-context invariants from `docs/permanent/domain/domain-model.md` "Cross-context invariants" section that this capability must respect. Per workflow.md §15.7, cross-context invariants live in domain-model.md, not on aggregate specs.)
+(Optional — list cross-context invariants from `docs/permanent/domain/domain-model.md` that this capability must respect.)
 
 - <invariant id or description>
 
 ## Flows that realize this capability
 
-(Optional but recommended — list `docs/permanent/flows/<flow-slug>.md` entries that traverse this capability's UI. Per workflow.md §15.7, flows are the cross-feature user-journey layer.)
+(Optional — list `docs/permanent/flows/<flow-slug>.md` entries that traverse this capability's UI.)
 
-- <flow-slug>: <one-line description>
+- <flow-slug>: <one-line>
 
 ## Out of scope
 
@@ -65,8 +66,7 @@ Each AC is referenced by ≥1 BDD scenario via `# AC: <id>` comment in feature f
 
 ## Threat considerations
 
-(Required if data_classification > public OR capability crosses a trust boundary.
-The agent surfaces the questions; the human supplies the answers.)
+(Required if `data_classification > public` OR capability crosses a trust boundary. The agent surfaces the questions; the human supplies the answers.)
 
 - Trust boundaries crossed: <human answer>
 - Data flows in / out: <human answer>
@@ -75,10 +75,10 @@ The agent surfaces the questions; the human supplies the answers.)
 
 ## Authentication required
 
-(Required if data_classification ≥ internal)
+(Required if `data_classification ≥ internal`.)
 
 - Required: yes | no
-- Type: <e.g., session, JWT, OAuth flow>
+- Type: <session, JWT, OAuth flow, etc.>
 
 ## Authorization model
 

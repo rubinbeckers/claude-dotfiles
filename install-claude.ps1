@@ -1,52 +1,58 @@
-# install-claude.ps1
+# install-claude.ps1 — Windows symlink installer for claude-dotfiles v1.1
 #
-# Symlinks the agentic-SDLC workflow v1.0 dotfiles into Claude Code's
-# user-level discovery directories:
-#   ~/.dotfiles/skills/<skill>/SKILL.md  →  ~/.claude/commands/<skill>.md
-#   ~/.dotfiles/agents/<agent>.md        →  ~/.claude/agents/<agent>.md
+# Creates:
+#   $env:USERPROFILE\.claude\commands\<skill>.md -> $env:USERPROFILE\.dotfiles\skills\<skill>\SKILL.md
+#   $env:USERPROFILE\.claude\agents\<agent>.md   -> $env:USERPROFILE\.dotfiles\agents\<agent>.md
 #
-# Run on first install of the dotfiles and any time skills/agents are added
-# or renamed. Symlinks point at the live files in this repo, so updates
-# (e.g. `git pull` on the dotfiles) propagate without re-running this script.
+# Requires Developer Mode enabled OR running PowerShell as Administrator
+# (symlink creation on Windows is gated otherwise).
 #
-# Windows note: creating symbolic links requires either Developer Mode
-# enabled OR running PowerShell as Administrator.
+# Re-running is safe — overwrites existing symlinks.
 
-$dotfiles    = "$env:USERPROFILE\.dotfiles"
-$commandsDir = "$env:USERPROFILE\.claude\commands"
-$agentsDir   = "$env:USERPROFILE\.claude\agents"
+$ErrorActionPreference = "Stop"
 
-New-Item -ItemType Directory -Path $commandsDir -Force | Out-Null
-New-Item -ItemType Directory -Path $agentsDir   -Force | Out-Null
+$DotfilesDir = if ($env:DOTFILES_DIR) { $env:DOTFILES_DIR } else { Join-Path $env:USERPROFILE ".dotfiles" }
+$ClaudeDir   = if ($env:CLAUDE_DIR)   { $env:CLAUDE_DIR }   else { Join-Path $env:USERPROFILE ".claude" }
+$CommandsDir = Join-Path $ClaudeDir "commands"
+$AgentsDir   = Join-Path $ClaudeDir "agents"
 
-# --- Skills: one per directory, each with SKILL.md ---
+if (-not (Test-Path $DotfilesDir)) {
+    Write-Error "Dotfiles directory not found at $DotfilesDir. Clone the repo there, or set `$env:DOTFILES_DIR."
+    exit 1
+}
+
+New-Item -ItemType Directory -Force -Path $CommandsDir | Out-Null
+New-Item -ItemType Directory -Force -Path $AgentsDir   | Out-Null
+
+Write-Host "Installing skills as commands..."
 $skillCount = 0
-Get-ChildItem "$dotfiles\skills" -Directory |
-  ForEach-Object {
-    $skillFile = Join-Path $_.FullName 'SKILL.md'
-    $linkPath  = Join-Path $commandsDir "$($_.Name).md"
-
+Get-ChildItem -Directory (Join-Path $DotfilesDir "skills") | ForEach-Object {
+    $skillName = $_.Name
+    $skillFile = Join-Path $_.FullName "SKILL.md"
     if (Test-Path $skillFile) {
-      if (Test-Path $linkPath) { Remove-Item $linkPath }
-      New-Item -ItemType SymbolicLink -Path $linkPath -Target $skillFile | Out-Null
-      Write-Host "Linked skill:  $($_.Name)"
-      $skillCount++
-    }
-  }
-
-# --- Agents: one .md file each, flat layout under agents/ ---
-$agentCount = 0
-if (Test-Path "$dotfiles\agents") {
-  Get-ChildItem "$dotfiles\agents" -Filter '*.md' -File |
-    ForEach-Object {
-      $linkPath = Join-Path $agentsDir $_.Name
-
-      if (Test-Path $linkPath) { Remove-Item $linkPath }
-      New-Item -ItemType SymbolicLink -Path $linkPath -Target $_.FullName | Out-Null
-      Write-Host "Linked agent:  $($_.BaseName)"
-      $agentCount++
+        $target = Join-Path $CommandsDir "$skillName.md"
+        if (Test-Path $target) { Remove-Item $target -Force }
+        New-Item -ItemType SymbolicLink -Path $target -Target $skillFile | Out-Null
+        Write-Host "  $skillName -> $skillFile"
+        $skillCount++
     }
 }
 
+Write-Host "Installing agents..."
+$agentCount = 0
+Get-ChildItem -File -Filter "*.md" (Join-Path $DotfilesDir "agents") | ForEach-Object {
+    $agentName = $_.Name
+    $agentFile = $_.FullName
+    $target = Join-Path $AgentsDir $agentName
+    if (Test-Path $target) { Remove-Item $target -Force }
+    New-Item -ItemType SymbolicLink -Path $target -Target $agentFile | Out-Null
+    Write-Host "  $agentName -> $agentFile"
+    $agentCount++
+}
+
 Write-Host ""
-Write-Host "Done. $skillCount skills linked, $agentCount agents linked."
+Write-Host "Installed $skillCount skills and $agentCount agents."
+Write-Host "Dotfiles at: $DotfilesDir"
+Write-Host "Claude config at: $ClaudeDir"
+Write-Host ""
+Write-Host "Symlinks point at the live files; 'git pull' on the dotfiles propagates without re-running."
