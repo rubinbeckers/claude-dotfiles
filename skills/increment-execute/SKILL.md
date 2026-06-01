@@ -41,6 +41,13 @@ Update INDEX: `current_cycle: K`, `current_step: develop`.
 
 ### 3. Delegate to increment-develop
 
+**Worktree pre-check (multi-item increments only):** Before constructing the manifest for
+item N where N > 1, confirm that all prior items' changes are committed on the increment
+branch. A worktree for item N branches from the committed state — uncommitted changes from
+prior items will be absent and can cause type errors or missing modules at review time.
+If uncommitted changes from prior items exist, commit them before creating the new worktree.
+Log this as a note in `progress.md` if a commit was forced by this check.
+
 Construct the manifest per `_meta` §4 with `mode: increment`. The manifest includes:
 - `increment-scope.md`
 - Proposed/accepted features and design specs for the increment

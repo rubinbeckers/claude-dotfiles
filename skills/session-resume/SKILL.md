@@ -43,6 +43,11 @@ Per the staging rule in `phase-close`: if any diffs were staged at the end of th
 
 ### 3. Scan git
 
+Run `git fetch --all --prune` before any local-vs-remote branch comparison. This ensures
+remote merges performed via the GitHub UI (without a local push) are visible to the scan.
+Without a fetch, the local branch may lag behind `origin/<branch>` and a merged increment
+will appear still `awaiting-merge`.
+
 Fetch the operating branch (typically `develop`). Compare the current state to what INDEX expects:
 
 - Active increment branch present? Merged?
