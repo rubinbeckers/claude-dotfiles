@@ -129,6 +129,14 @@ Manifest with `mode: increment`. Inputs: increment-scope.md, the capabilities th
 
 Parse return. On success: domain-design wrote proposed features, design specs, and DRs under `docs/permanent/...`. On halt routing back to phase-design (e.g., capability ambiguity, glossary gap): re-pass Gate 1 for the affected phase artifacts.
 
+**On a `design-gap` return** (`_meta` §17): emit the design-decision prompt to the human. Parse the reply:
+- `use <N>` / `use <component>` → resolve to that component; append a `design-deviations.md` entry only if the resolution itself was a divergence (e.g., prototype-vs-`design.md`); re-invoke domain-design with the choice.
+- `A` → the human supplies an updated `design.md`; absorb it (it's human-owned — accept the file as given), append a `design-deviations.md` entry (`resolution: human-updated-design-md`, `debt_class: none`); re-invoke domain-design.
+- `B-phase` / `B-accept` (components only) → re-invoke domain-design to author the provisional component from guidelines; on its return, append the `design-deviations.md` entry and the corresponding debt entry — `phase-debt.md` (`category: design-deviation`) for B-phase, `accepted-debt.md` for B-accept.
+- `accept-gap` → append a `design-deviations.md` entry (`resolution: accepted-gap`) and an `accepted-debt.md` entry; the spec records the gap as out-of-scope.
+
+A B-path that materially changes an already-accepted spec re-passes the relevant gate, as with any spec change.
+
 ### 6. Delegate to technical-design
 
 Manifest with `mode: increment`. Inputs: increment-scope.md, domain-design outputs from step 5, accepted architecture docs, accepted ADRs.
@@ -169,7 +177,7 @@ Any entry size L, or covering >3 scenarios, or covering >2 design-spec requireme
 
 ### 10. Gate 2
 
-Emit the gate-2 approval prompt per `_meta` §13. List proposed features, design specs, DRs, and any new ADRs (with one-line summaries); list the sequencing entries; reference the increment-scope.md and technical-analysis.md files for review.
+Emit the gate-2 approval prompt per `_meta` §13. List proposed features, design specs, DRs, and any new ADRs (with one-line summaries); list the sequencing entries; reference the increment-scope.md and technical-analysis.md files for review. **Also list any provisional components authored this increment and their debt dispositions (with the `design-deviations.md` entry references), so the human approves them in context.**
 
 Parse reply:
 - **approve** → step 11.

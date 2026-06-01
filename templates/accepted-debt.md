@@ -16,7 +16,7 @@ This record is permanent: a reader twelve phases later can answer "what did we k
 - accepted_in_increment: <inc-NNN-<solidifying-slug>>
 - originally_logged_at: <ISO>
 - source: <skill or agent that originally logged it>
-- category: discovered-defect | flaky-test | refactor | standards-observation | regression
+- category: discovered-defect | flaky-test | refactor | standards-observation | regression | design-deviation
 - severity: low | medium | high
 - size_estimate: S | M | L
 - description: |

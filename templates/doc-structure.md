@@ -1,4 +1,4 @@
-# Documentation structure (v1.1)
+# Documentation structure (v1.2)
 
 How the project's documentation is organized, where each kind of doc lives, and how it moves through its lifecycle.
 
@@ -47,6 +47,8 @@ Everything the workflow manages lives under `docs/`. The project root holds proj
           subtree-INDEX.md
           <ADR-NNN-slug>.md
       design/
+        design.md                  # the design system — tokens + component inventory (human-owned; always-allowed; source of truth for UI)
+        design-deviations.md       # append-only log of every divergence from design.md
         prototype/
         archive/                   # prior prototypes that were replaced
     transient/                     # working state; only the active phase's content is active
@@ -156,8 +158,9 @@ Per `_meta` §1, every agent and skill may always read certain docs without list
 - `docs/permanent/architecture/coding-standards.md`, `testing-standards.md`, `naming-conventions.md`
 - `docs/permanent/domain/glossary.md`
 - `docs/permanent/domain/domain-model.md`
+- `docs/permanent/design/design.md` and `docs/permanent/design/design-deviations.md`
 
-These are the project's universal context. Everything else is by manifest. `domain-model.md` is in the set because cross-context invariants must be respected by every spec-bearing artifact; an agent that doesn't read it can silently violate an invariant.
+These are the project's universal context. Everything else is by manifest. `domain-model.md` is in the set because cross-context invariants must be respected by every spec-bearing artifact; an agent that doesn't read it can silently violate an invariant. `design.md` is in the set for the same reason on the UI side — it is the source of truth for components and tokens, so any agent producing or validating a UI-bearing artifact must read it (`_meta` §17). It is **human-owned**: always-allowed for reading, never written by an agent.
 
 ## 10. Tag vocabulary
 

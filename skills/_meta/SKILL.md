@@ -16,6 +16,8 @@ Every skill and agent may always read, without listing them in its manifest:
 - `docs/permanent/architecture/coding-standards.md`, `testing-standards.md`, `naming-conventions.md`
 - `docs/permanent/domain/glossary.md`
 - `docs/permanent/domain/domain-model.md` (cross-context invariants — must be readable by any agent that produces or validates spec-bearing artifacts so invariants aren't silently violated)
+- `docs/permanent/design/design.md` (the design system — tokens + component inventory; same rationale as `domain-model.md`: any agent that produces or validates a UI-bearing artifact must read it so the design contract isn't silently violated. Human-owned — agents read, never write, per §17)
+- `docs/permanent/design/design-deviations.md` (the design-deviation log — readable so review and integrity can confirm any provisional component is logged)
 
 Everything the workflow manages lives under `docs/`. Project code lives elsewhere (e.g., `src/`) and is not workflow scope unless explicitly listed in a manifest. Anything outside the always-allowed set must appear in the agent's manifest or the skill's `Inputs` section; the agent halts and surfaces the gap rather than reading outside scope.
 
@@ -55,16 +57,17 @@ The agent's first step reads the block, asserts it matches its declared inputs, 
 
 ```
 <<<RETURN>>>
-status: success | halt | scope-expansion
+status: success | halt | scope-expansion | design-gap
 files_written: [<paths>]
 key_findings: <prose, <=200 words>
 grounded_in: [<sources>]
 observations: [<entries per §6>]
 halt: { at_step: <id>, reason: <one-line>, route_to: <destination> }
+design_gap: { kind: component | token, use_case: <one-line>, candidates: [<component names, if any>], recommendation: <option or "no match">, recommended_classification: <A | B-phase | B-accept | accept-gap> }
 <<<END>>>
 ```
 
-Malformed returns halt to the human.
+Malformed returns halt to the human. A `design-gap` return is the agent surfacing a design-system decision it must not make itself (§17); the orchestrator emits the design-decision prompt and re-invokes with the resolution.
 
 ## 5. Subagents do not traverse the filesystem
 
@@ -195,3 +198,49 @@ Every skill and agent emits structured status lines so the human can follow prog
 ## 16. The principles document is referenced, not duplicated
 
 `agentic-sdlc-principles.md` is the workflow-agnostic statement of why these rules exist. Skills reference principles by section when explaining a behavior; they don't restate them.
+
+## 17. Design-system guardrail
+
+`docs/permanent/design/design.md` is the project's design system — the authoritative inventory of design tokens (`colors`, `typography`, `rounded`, `spacing`, `motion`, `state`) and the `components:` catalog. It is the **source of truth** for UI: it outranks prototypes. It is **human-owned** — agents read it (§1) and never write to it.
+
+Every agent that produces or validates a UI-bearing artifact (design specs, UI implementation, UI tests) resolves the components and tokens it needs against `design.md`:
+
+- **Direct match** — exactly one component (or token) clearly fits → proceed, referencing it by name. No surfacing.
+- **Ambiguous / multiple candidates** — one or more components *may* fit, or several fit → do not pick silently (§2). Return `design-gap` with the candidate list and a **recommendation**. The orchestrator surfaces the choice to the human.
+- **No match — component** → return `design-gap` (no candidates, `recommended_classification` set). The human chooses: **(A)** supply an updated `design.md` containing the component, or **(B)** instruct the agent to design it from `design.md`'s guidelines — and, if B, set the debt class: **B-phase** (the solidifying increment reconciles it) or **B-accept** (logged as accepted debt, not fixed).
+- **No match — foundation token** → return `design-gap`, **human-only**: the agent never improvises a color/type/spacing/motion/state value. The human supplies an updated `design.md` or explicitly accepts the gap as debt (`accept-gap`). This honors the design system's own rule that new use cases add components, not foundations.
+
+**Provisional components.** When the human chooses B, the authoring agent records the improvised component *inside the design-spec* (marked `provisional: true`, with `guidelines_basis:`) and **never** edits `design.md`. Promoting a provisional into `design.md` is a human act, typically at the solidifying-increment drain.
+
+**Deviations are always logged.** Every divergence from `design.md` — a B-path provisional component, an accepted token gap, or a prototype that diverges from the system — is appended to `docs/permanent/design/design-deviations.md`. The fix-vs-accept disposition is carried by an ordinary `phase-debt.md` entry (`category: design-deviation`, drained by the solidifying increment) or `accepted-debt.md` entry. A human-supplied `design.md` update is still logged (`resolution: human-updated-design-md`, `debt_class: none`) for history. `doc-integrity` flags any design-spec reference that resolves to neither `design.md` nor a logged provisional, and any `design-deviation` phase-debt entry left `pending` past the solidifying-increment drain.
+
+**Design-decision prompt (orchestrator → human).** Emitted by `increment-design` (Gate 2) and `increment-execute` (backstop) on a `design-gap` return:
+
+```
+═══════════════════════════════════════════════
+DESIGN DECISION REQUIRED — <component | foundation token>
+Active scope: <phase-slug>/<inc-slug>
+
+Use case: <what UI/design is needed>
+
+[ Ambiguous-match case ]
+Candidate(s) in design.md:
+  1. <component> — <why it might fit>
+  2. <component> — <why it might fit>
+Agent recommendation: <option N> — <one-line rationale>
+Reply: "use <N>" | "use <component-name>"
+
+[ No-match case ]
+No matching <component | token> found in design.md.
+Options:
+  A.        Provide an updated design.md containing the needed <component | token>.
+  B-phase.  (components only) Design it from design.md's guidelines; reconcile in the solidifying increment.
+  B-accept. (components only) Design it from guidelines; log as accepted debt (won't be fixed).
+  accept-gap. Accept the gap as debt without designing now.
+  (tokens: only A or accept-gap — no agent improvisation)
+Agent recommendation: <A | B-phase | B-accept | accept-gap> — <rationale>
+Reply: "A" (then supply the file) | "B-phase" | "B-accept" | "accept-gap"
+═══════════════════════════════════════════════
+```
+
+The orchestrator parses the reply, records the deviation (and any debt entry), and re-invokes the agent with the resolution. A B-path resolution that materially changes an accepted spec re-passes the relevant gate, as with any spec change.

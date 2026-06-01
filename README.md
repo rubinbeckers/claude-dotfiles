@@ -1,8 +1,10 @@
-# claude-dotfiles — agentic-SDLC workflow v1.1
+# claude-dotfiles — agentic-SDLC workflow v1.2
 
-Personal dotfiles hosting the skills, subagents, and templates that drive the **agentic-SDLC workflow v1.1** in Claude Code.
+Personal dotfiles hosting the skills, subagents, and templates that drive the **agentic-SDLC workflow v1.2** in Claude Code.
 
-v1.1 is a leanness pass over v1.0: the develop / test / review loop runs once per increment (not once per backlog item), the four decision-record types collapse to two (DR and ADR), the transient → proposed → permanent file-move staging is replaced by status-in-place, and several skills consolidated. The dev / test agent split — the workflow's core quality lever — is preserved.
+v1.2 is a minor, additive update over v1.1: it adds the **design-system guardrail**. A project-level `docs/permanent/design/design.md` (the design system — design tokens + component inventory) becomes a permanent, always-allowed, human-owned source of truth for UI. When UI work needs a component or token with no match in `design.md`, the gap is surfaced to the human (at Gate 2, with an execute-time backstop) for disposition — supply an updated `design.md`, or design the component from guidelines and class it as phase debt or accepted debt — and every divergence is logged in `design-deviations.md`. The fix-vs-accept choice reuses the existing solidifying-increment and accepted-debt machinery. No lifecycle, gate, or schema change. See `migration-v1.1-to-v1.2.md`.
+
+v1.1 was a leanness pass over v1.0: the develop / test / review loop runs once per increment (not once per backlog item), the four decision-record types collapse to two (DR and ADR), the transient → proposed → permanent file-move staging is replaced by status-in-place, and several skills consolidated. The dev / test agent split — the workflow's core quality lever — is preserved.
 
 ## What's in here
 
@@ -38,6 +40,8 @@ v1.1 is a leanness pass over v1.0: the develop / test / review loop runs once pe
 │   ├── aggregate.md
 │   ├── feature.md
 │   ├── design-spec.md
+│   ├── design.md                (placeholder design system — tokens + components; human-owned; always-allowed)
+│   ├── design-deviations.md     (append-only log of divergences from design.md)
 │   ├── flow.md
 │   ├── decision-record.md       (DR + ADR shared spec, two-type)
 │   ├── increment-scope.md       (includes implementation plan + sequencing)
@@ -94,14 +98,14 @@ v1.1 is a leanness pass over v1.0: the develop / test / review loop runs once pe
 
    Symlinks point at the live files in this repo. `git pull` propagates without re-running the installer. Re-run when skills or agents are added / removed / renamed.
 
-3. **Verify access.** When you run `session-resume` in a project, the orchestrator validates `skill-versions.lock` against the dotfiles tag (default: `workflow-v1.1`).
+3. **Verify access.** When you run `session-resume` in a project, the orchestrator validates `skill-versions.lock` against the dotfiles tag (default: `workflow-v1.2`).
 
 ### Starting a new project
 
 In a new repo with no `docs/INDEX.md`:
 
 1. In Claude Code, open the project. The harness auto-loads the workflow on session start.
-2. Invoke `project-init`. It scaffolds everything under `docs/`: `workflow.md`, `agentic-sdlc-principles.md`, `doc-structure.md`, `INDEX.md`, `skill-versions.lock`, the `permanent/` and `transient/` trees, and placeholder standards docs. The project root holds project code, not workflow artifacts.
+2. Invoke `project-init`. It scaffolds everything under `docs/`: `workflow.md`, `agentic-sdlc-principles.md`, `doc-structure.md`, `INDEX.md`, `skill-versions.lock`, the `permanent/` and `transient/` trees, placeholder standards docs, and a placeholder `design/design.md` + empty `design/design-deviations.md`. The project root holds project code, not workflow artifacts. Replace the placeholder `design.md` with your real design system before UI work begins.
 3. Provide raw input for the first phase. `project-init` routes to `phase-design`.
 
 ### Resuming work
@@ -120,7 +124,7 @@ Any subsequent session, anywhere in the lifecycle: type *"resume"* or *"continue
 | `develop`                           | Integration; receives increment PRs.                                                                     |
 | `inc-<NNN>-<slug>`                  | Increment branch; cut from develop at increment-design, merged at increment-close.                       |
 | `fix/<inc-slug>/<short>`            | Post-merge fix branch; cut from develop, merged before the increment advances to `closed`.               |
-| tag `workflow-v1.1`                 | Stable pin target. `docs/skill-versions.lock` in projects references this tag.                           |
+| tag `workflow-v1.2`                 | Stable pin target. `docs/skill-versions.lock` in projects references this tag.                           |
 
 ## Migrating from v1.0
 
@@ -135,10 +139,15 @@ If you have a project running v1.0:
 
 A migration helper isn't currently part of the workflow; the steps above are manual but tractable.
 
+## Migrating from v1.1
+
+v1.2 is additive. At a phase boundary, drop `design.md` (your design system, or the placeholder) and an empty `design-deviations.md` into `docs/permanent/design/`, switch the pin to `workflow-v1.2`, override the pin check (record a DR), and continue. No data migration. Full steps: `migration-v1.1-to-v1.2.md`.
+
 ## References
 
-- The v1.1 workflow contract: `docs/workflow.md` (at any v1.1-using project)
+- The v1.2 workflow contract: `docs/workflow.md` (at any v1.2-using project)
 - The principles this workflow instantiates: `docs/agentic-sdlc-principles.md`
 - Documentation layout: `docs/doc-structure.md`
-- Cross-cutting skill rules: `skills/_meta/SKILL.md` (in the dotfiles)
-- Migration from v1.0: `migration-v1.0-to-v1.1.md` (in the dotfiles)
+- Cross-cutting skill rules (incl. §17 design-system guardrail): `skills/_meta/SKILL.md` (in the dotfiles)
+- The design system (source of truth for UI): `docs/permanent/design/design.md`
+- Migration from v1.1: `migration-v1.1-to-v1.2.md`; from v1.0: `migration-v1.0-to-v1.1.md` (in the dotfiles)

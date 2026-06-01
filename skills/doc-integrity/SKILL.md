@@ -45,7 +45,7 @@ Findings → "Supersession failures."
 - No `TBD-*` IDs in any accepted artifact within the scope (any survivor is a critical workflow defect — the gate that should have numbered them failed).
 - No accepted artifact references a `withdrawn` or `deprecated` artifact in `Grounded in:` (this is a corruption signal — accepted work shouldn't be grounded in retired material).
 - Status transitions are legal per `_meta` §9 state machine.
-- No `phase-debt.md` entry with `disposition: pending` past a solidifying-increment-design step (the drain protocol in `workflow.md` §9 requires every entry to be dispositioned; a `pending` survivor is a workflow defect).
+- No `phase-debt.md` entry with `disposition: pending` past a solidifying-increment-design step (the drain protocol in `workflow.md` §9 requires every entry to be dispositioned; a `pending` survivor is a workflow defect). This includes `category: design-deviation` entries.
 
 Findings → "Status / ID failures."
 
@@ -92,6 +92,17 @@ Per `workflow.md` §14:
 
 Findings → "Invariant failures."
 
+### 5b. Design-system conformance (`_meta` §17)
+
+For every `accepted` or `proposed` design-spec within the scope (and, at increment scope, the components/tokens the increment's implementation exercises):
+
+- Every referenced component resolves to a component in `design.md` **or** to a `provisional: true` component in the design-spec that has a matching `design-deviations.md` entry whose debt disposition is non-`pending`.
+- Every referenced foundation token (color/type/rounded/spacing/motion/state) resolves to a token in `design.md`. A referenced token with no match is a failure (tokens are human-only; it should have been surfaced as a `design-gap`).
+- Every `provisional: true` component in a design-spec has a corresponding `design-deviations.md` entry; an unlogged provisional is a failure (silent improvisation).
+- Every `design-deviations.md` entry of `kind: component`/`token` with `debt_class: phase-debt` has a live `phase-debt.md` entry, and one with `debt_class: accepted` has an `accepted-debt.md` entry.
+
+This runs only if `design.md` exists (a project with no design system simply has no design-specs to validate). Findings → "Design-system failures."
+
 ### 6. Write integrity-report.md
 
 Sections:
@@ -100,8 +111,9 @@ Sections:
 - **Supersession failures**
 - **Status / ID failures**
 - **Invariant failures**
+- **Design-system failures**
 - **Index regeneration failures**
-- **Critical findings** (a subset of the above that warrant immediate halt — bidirectional supersession breaks, TBD-* in accepted artifacts, references to withdrawn from accepted, any grounding cycle)
+- **Critical findings** (a subset of the above that warrant immediate halt — bidirectional supersession breaks, TBD-* in accepted artifacts, references to withdrawn from accepted, any grounding cycle, unlogged design-system improvisation or an absent foundation token in an accepted design-spec)
 - **Routine findings** (everything else)
 
 If no findings, the report contains a single line: `Integrity: clean.`
@@ -118,4 +130,4 @@ Structured return per `_meta` §4. `key_findings` summarises critical count, rou
 
 ## Observations to surface
 
-Recurring reference failures clustered to a specific doc type (signal: template's `Grounded in:` discipline is lapsing); recurring supersession failures (signal: the agent or skill that supersedes isn't writing both sides of the link); subtrees regenerating with files missing required frontmatter fields (signal: a template field is being skipped during authoring).
+Recurring reference failures clustered to a specific doc type (signal: template's `Grounded in:` discipline is lapsing); recurring supersession failures (signal: the agent or skill that supersedes isn't writing both sides of the link); subtrees regenerating with files missing required frontmatter fields (signal: a template field is being skipped during authoring); recurring design-system failures (signal: `design.md` is missing a class of component, or authoring is skipping the §17 resolution step).

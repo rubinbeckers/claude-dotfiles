@@ -1,4 +1,4 @@
-# Workflow contract (v1.1)
+# Workflow contract (v1.2)
 
 This document is the canonical reference for what the workflow does, how phases and increments are structured, and what the gates mean. Skills implement this contract; if a skill's behavior diverges, the skill is wrong.
 
@@ -156,3 +156,11 @@ Once accepted, spec-bearing artifacts (capabilities, aggregates, features, desig
 - `fix/<inc-slug>/<short-slug>`: post-merge fix branch; cut from develop, merged before the increment advances to `closed`.
 
 The workflow does not manage `main`. Promotion from develop to main is human-driven and outside the contract.
+
+## 16. Design-system guardrail
+
+`docs/permanent/design/design.md` is the project's design system — the authoritative inventory of design tokens and components, and the **source of truth for UI** (it outranks prototypes). It is human-owned: agents read it, never edit it. The full rule is in `_meta` §17; the contract-level summary:
+
+- UI-bearing work resolves every component and token against `design.md`. A direct match proceeds; an ambiguous or absent match is surfaced to the human via the design-decision prompt at Gate 2 (design time) or, as a backstop, during `increment-execute`.
+- For a missing **component**, the human either supplies an updated `design.md` or directs the agent to design it from `design.md`'s guidelines, choosing whether the result is **phase debt** (reconciled by the solidifying increment) or **accepted debt**. For a missing **foundation token**, the choice is human-only — agents never improvise tokens.
+- Every divergence from `design.md` is logged in `docs/permanent/design/design-deviations.md`. The fix-vs-accept disposition reuses the existing debt machinery: a `category: design-deviation` entry in `phase-debt.md` (drained by the solidifying increment per §9) or a record in `accepted-debt.md`. `doc-integrity` enforces that design-spec references resolve and that no design-deviation stays `pending` past the drain.

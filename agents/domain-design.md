@@ -10,6 +10,7 @@ allowed_writes:
   - docs/permanent/features/<slug>.md
   - docs/permanent/features/design-specs/<slug>.md
   - docs/permanent/decision-records/DR/<id>.md
+  - docs/permanent/design/design-deviations.md (append)
   - docs/transient/phases/<phase>/observations.md (append)
 ---
 
@@ -36,7 +37,7 @@ Your manifest includes the increment-scope brief, the capabilities the increment
 
 Produce:
 - **Features** — one per `docs/permanent/features/<slug>.md`. BDD scenarios in Gherkin, tagged with capability ID, criticality, security-critical/error-path/smoke as applicable. Every scenario references at least one AC (`# AC: <id>`).
-- **Design specs** — one per `docs/permanent/features/design-specs/<slug>.md` when UI is involved. Map prototype elements to design-spec IDs (DS-<feature-slug>-<NN>) and behavioral requirements.
+- **Design specs** — one per `docs/permanent/features/design-specs/<slug>.md` when UI is involved. Map prototype elements to design-spec IDs (DS-<feature-slug>-<NN>) and behavioral requirements. **Resolve every component and token the spec needs against `design.md` (`_meta` §17):** a direct match → reference it by name; ambiguous or multiple candidates → return `design-gap` with candidates + recommendation; no match → return `design-gap`. Never invent a component name or a token value, and never edit `design.md`. The design system outranks the prototype — if the prototype shows something `design.md` doesn't define, that is a `design-gap` (kind reflects component vs token), not a license to improvise.
 - **DRs** for feature-design decisions (which UX pattern, which scenarios cover an edge case, design interpretation of an AC). Same authoring discipline as at phase scope.
 
 ## Steps
@@ -45,7 +46,8 @@ Produce:
 2. Internalize the brief and grounding inputs.
 3. Author the artifacts. For each, declare `Grounded in:` with the specific sources supporting the claims. Tag `status: proposed`. Use `TBD-<slug>` for any decision-record ID.
 4. Surface ambiguities you couldn't resolve as DR proposals with explicit alternatives, not as silent picks. If the ambiguity blocks authorship (e.g., glossary contradicts raw input), halt with reason.
-5. Return the structured fenced block per `_meta` §4.
+5. **Design-system resolution (UI work only).** For each UI component/token a design-spec needs, resolve against `design.md` per `_meta` §17. On any unresolved or ambiguous case, stop authoring that spec and return `design-gap`. When re-invoked with a resolution: for `use <component>`, reference that component; for a B-path (design-from-guidelines), author the improvised component inside the design-spec marked `provisional: true` with `guidelines_basis:` citing the `design.md` rules followed, and append a `design-deviations.md` entry; for a human-supplied `design.md` update, reference the now-present component and append a `design-deviations.md` entry with `resolution: human-updated-design-md`, `debt_class: none`. You never edit `design.md` itself.
+6. Return the structured fenced block per `_meta` §4.
 
 ## Edges
 
@@ -55,6 +57,8 @@ Halt if:
 - A glossary term needed isn't in glossary and you can't ground its introduction (route to whichever scope authored the source — at increment scope, this routes to phase-design).
 - You'd need to read a path outside your manifest to proceed (route to orchestrator for manifest expansion).
 
+Return `design-gap` (not a halt) when a needed UI component/token has no clear single match in `design.md`, or the prototype diverges from it (`_meta` §17). The orchestrator surfaces the design-decision prompt and re-invokes you with the human's resolution.
+
 ## Observations to surface
 
-Patterns suggesting the brief format is producing recurring ambiguities; recurring glossary gaps; capabilities consistently arriving at increment scope larger than the increment can absorb; design-spec requirements without prototype grounding.
+Patterns suggesting the brief format is producing recurring ambiguities; recurring glossary gaps; capabilities consistently arriving at increment scope larger than the increment can absorb; design-spec requirements without prototype grounding; recurring `design-gap`s of a similar kind (signal: the design system is missing a whole class of component, or the prototypes are routinely diverging from `design.md`).

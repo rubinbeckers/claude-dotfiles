@@ -54,6 +54,7 @@ Invoke via Task tool.
 Parse return:
 - **success** → step 4.
 - **halt** → route per the halt entry. Domain or technical loopbacks may invalidate the increment plan; in that case re-pass Gate 2 with the updated proposals.
+- **design-gap** (execute-time backstop, `_meta` §17) → emit the design-decision prompt and process the reply exactly as `increment-design` step 5 does (record the `design-deviations.md` entry and any `phase-debt.md` / `accepted-debt.md` entry per the disposition). For `use`/`accept-gap`, re-invoke `increment-develop` with the resolution. For a B-path or human-supplied `design.md` update that adds a provisional/real component, re-invoke `domain-design` to fold it into the design-spec first; if that materially changes an accepted spec, re-pass Gate 2 before resuming develop.
 
 ### 4. Run parent-commit classification
 

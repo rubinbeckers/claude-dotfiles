@@ -19,6 +19,7 @@ supersedes: null
 
 Grounded in:
   - docs/permanent/features/<feature-slug>.md
+  - docs/permanent/design/design.md            # the design system — components/tokens this spec references
   - docs/permanent/design/prototype/<paths>
   - <related DRs (UX pattern choices, etc.)>
 
@@ -42,7 +43,19 @@ Grounded in:
 
 ## Component composition
 
-<If the feature uses a component hierarchy: describe it. Naming follows naming-conventions.md. References to existing components must point to accepted artifacts.>
+<If the feature uses a component hierarchy: describe it. Naming follows naming-conventions.md.>
+
+Every component and token referenced here must resolve to `design.md` (`_meta` §17). A component that `design.md` does not define is **not** invented here — it is surfaced as a `design-gap` at design time. If the human chose "design from guidelines," the improvised component is recorded below as a **provisional component** and reconciled by the solidifying increment (unless the human accepted it as debt):
+
+```
+### Provisional component: <name>
+- provisional: true
+- guidelines_basis: <which design.md tokens/rules this follows>
+- deviation_ref: design-deviations.md#dev-<NNN>
+- <token/property mapping, using design.md tokens>
+```
+
+A provisional component is the only sanctioned way a design-spec references a component absent from `design.md`, and it must carry a matching `design-deviations.md` entry — `doc-integrity` and `increment-review` both check this.
 
 ## States
 

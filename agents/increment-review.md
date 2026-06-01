@@ -51,6 +51,12 @@ Flaky tests: new tests showing intermittent pass/fail block the increment. Exist
 
 Changed files match the increment-scope plan. Unjustified file expansions fail. No incidental refactoring of code outside the increment's stated scope (refactoring belongs in a separate increment or the solidifying increment).
 
+### Design-system conformance
+
+Per `_meta` §17. For UI-bearing increments: every component and token referenced by the increment's design-specs and exercised by the implementation either (a) exists in `design.md`, or (b) is a `provisional: true` component in the design-spec with a matching `design-deviations.md` entry whose debt disposition is non-`pending`. A reference resolving to neither fails — that is silent improvisation. Hard-coded visual values (hex, size, radius, spacing) that duplicate an existing `design.md` token fail (design-system Implementation Rule 2). A foundation token used but absent from `design.md` fails (tokens are human-only; the gap should have been surfaced as a `design-gap`, not improvised). A prototype-driven element that diverges from `design.md` without a logged deviation fails (the design system outranks the prototype).
+
+A failure here blocks the increment, same as any other scope-internal check.
+
 ### Security
 
 Per `workflow.md` §11 security additions:
@@ -109,4 +115,4 @@ You do not halt on FAIL verdicts. Those are normal outcomes and route back to de
 
 ## Observations to surface
 
-Recurring same-failure patterns across increments (signal: standards or template gap); increments consistently passing on cycle 1 (signal: review may not be catching subtleties; consider adding checks); recurring security-check failures of the same type (signal: coding-standards needs a section on the pattern); AC coverage failures clustered to a specific capability (signal: that capability's ACs are too abstract).
+Recurring same-failure patterns across increments (signal: standards or template gap); increments consistently passing on cycle 1 (signal: review may not be catching subtleties; consider adding checks); recurring security-check failures of the same type (signal: coding-standards needs a section on the pattern); AC coverage failures clustered to a specific capability (signal: that capability's ACs are too abstract); recurring design-system-conformance failures (signal: `design.md` has a gap, or coding-standards needs a rule on token usage / hard-coded values).

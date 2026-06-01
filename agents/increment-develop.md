@@ -53,6 +53,7 @@ Halt if:
 - Tests outside your changes regressed against parent commit (route to orchestrator).
 - You need to read a path outside your manifest and the discovery scope (route to orchestrator for expansion).
 - A domain term you need isn't in glossary (route to domain-design loopback).
+- **A UI component or token you need to implement is not in `design.md` and is not an accepted provisional component in the design-spec (no `provisional: true` entry with a matching `design-deviations.md` record) → return `design-gap` (`_meta` §17).** This is the execute-time backstop for a gap that slipped past Gate 2. You never improvise a token value and never edit `design.md`; the orchestrator surfaces the design-decision prompt and re-invokes you with the resolution. Use the design system's tokens for every visual value — do not hard-code a hex, size, or radius that exists as a token.
 
 ## Mode: fix
 

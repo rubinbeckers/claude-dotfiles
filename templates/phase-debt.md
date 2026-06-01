@@ -1,6 +1,6 @@
 # Phase-debt template
 
-Entries appended throughout the phase by `increment-review` (Category-C discovered defects, code-level standards observations, refactoring opportunities), `increment-test` (flaky tests), `feedback-triage` (SOLIDIFYING_DEBT dispositions), and `increment-close` (regression findings deferred to solidifying).
+Entries appended throughout the phase by `increment-review` (Category-C discovered defects, code-level standards observations, refactoring opportunities), `increment-test` (flaky tests), `feedback-triage` (SOLIDIFYING_DEBT dispositions), `increment-close` (regression findings deferred to solidifying), and `increment-design` / `increment-execute` (design deviations the human classed as phase debt — `_meta` §17).
 
 The phase's solidifying increment fully drains this log at `increment-design` step 2 by dispositioning every entry. After the solidifying increment's `increment-close`, the log is empty.
 
@@ -16,7 +16,7 @@ The phase's solidifying increment fully drains this log at `increment-design` st
 - logged_at: <ISO>
 - source: <skill or agent>
 - source_increment: <inc-slug>
-- category: discovered-defect | flaky-test | refactor | standards-observation | regression
+- category: discovered-defect | flaky-test | refactor | standards-observation | regression | design-deviation
 - severity: low | medium | high
 - size: S | M | L                          # estimate from the logging source; default M
 - description: |
@@ -43,3 +43,7 @@ The phase's solidifying increment fully drains this log at `increment-design` st
 - `accepted` — accepted as permanent technical debt; appended to `docs/permanent/architecture/accepted-debt.md`. Removed from the active log.
 
 Any entry that's `pending` past the solidifying-increment-design step is a workflow defect — `doc-integrity` flags it at the next close gate.
+
+## Design-deviation entries
+
+A `category: design-deviation` entry is a provisional component (or accepted token gap) the human classed as phase debt at a `design-gap` decision (`_meta` §17). Its `references:` point to the `design-deviations.md` entry and the design-spec's provisional component. Reconciling it usually requires a **human edit to `design.md`** (promoting the provisional into the design system) followed by an agent refactor of the provisional usage to reference the now-official component — so the solidifying increment surfaces a proposed component definition for the human rather than editing the human-owned `design.md` itself. When reconciled, append `reconciled_at:` / `reconciled_in:` to the `design-deviations.md` entry.
