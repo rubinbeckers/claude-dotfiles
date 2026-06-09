@@ -50,7 +50,8 @@ You do not invent scenarios. If the spec doesn't describe a behavior, you don't 
    - **Spec divergence** (your test exercises the implementation's intended scope; assertion fails): record as a finding for the reviewer. Not a halt.
    - **Regression** or **discovered defect** (your test fails on adjacent code): do NOT perform the parent-commit check yourself — that would expose the implementation. Report the failure to the orchestrator with `needs_classification: true`. The orchestrator runs the check and provides the classification before the reviewer runs.
    - **Structural** (test won't compile, fixtures missing, runner crashes): your test is wrong. Halt with `test-broken`.
-7. Return the structured fenced block. Include the count of each failure category and the specific test paths.
+7. **Mandatory formatting gate (final step before returning):** Run `npm run lint -- --fix` (or `npx prettier --write .` if the project's lint command doesn't support `--fix`) on all authored and modified files. Re-stage any files changed by the formatter. Do not return until `npm run lint` passes with zero Prettier violations. If violations remain after the write pass, resolve them manually before returning.
+8. Return the structured fenced block. Include the count of each failure category and the specific test paths.
 
 ## Edges
 

@@ -41,7 +41,8 @@ Per `_meta` §5: you may read type and interface declaration files within the sa
 4. Write unit tests covering new logic. Target: ≥80% line coverage on new code by default; 100% line + branch on `@security-critical` paths or capabilities at `data_classification ≥ confidential`. Tests assert behavior, not implementation details.
 5. Run unit tests. All passing on new code. For tests failing outside your changes: do not investigate yourself. Report the failures to the orchestrator with `needs_classification: true`; the orchestrator runs the parent-commit check.
 6. For ADRs the implementation exercised: record the status transition in your return (`proposed → accepted-pending-review`, or `proposed → withdrawn` with rationale if the decision wasn't actually needed).
-7. Return the structured fenced block per `_meta` §4.
+7. **Mandatory formatting gate (final step before returning):** Run `npm run lint -- --fix` (or `npx prettier --write .` if the project's lint command doesn't support `--fix`) on all authored and modified files. Re-stage any files changed by the formatter. Do not return until `npm run lint` passes with zero Prettier violations. If violations remain after the write pass, resolve them manually before returning.
+8. Return the structured fenced block per `_meta` §4.
 
 ### Edges (mode: increment)
 
@@ -72,7 +73,8 @@ You do not expand scope. If the fix would require adding new scenarios, touching
    - If your change broke them and the tests are correct, fix the change.
    - If the tests are wrong relative to the new desired behaviour, halt with `scope-expansion` — this is not a fix, it's a spec change.
 5. If CI logs are in your manifest (after a prior CI failure), read them and apply the fix targeted to the CI failure.
-6. Return the structured fenced block.
+6. **Mandatory formatting gate (final step before returning):** Run `npm run lint -- --fix` (or `npx prettier --write .` if the project's lint command doesn't support `--fix`) on all authored and modified files. Re-stage any files changed by the formatter. Do not return until `npm run lint` passes with zero Prettier violations. If violations remain after the write pass, resolve them manually before returning.
+7. Return the structured fenced block.
 
 ### Edges (mode: fix)
 
