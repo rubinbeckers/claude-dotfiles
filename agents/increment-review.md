@@ -47,6 +47,17 @@ Smoke tagging: tests covering capability `data_classification ≥ confidential`,
 
 Flaky tests: new tests showing intermittent pass/fail block the increment. Existing tests rediscovered as flaky are logged to `phase-debt.md` but don't block.
 
+### Playwright gate (UI-touching increments)
+
+When the increment changes any rendered UI surface, route, shared component, or renames/removes any element that existing Playwright specs may target (tab labels, `data-testid` attributes, input names, ARIA labels, navigation items):
+
+1. Run `npm run build` to completion. If the build fails, treat as FAIL — do not proceed to test.
+2. Run `npm run test:ui` (or `npx playwright test`) for the FULL Playwright suite — not just the increment's own new specs. Cross-spec regressions from renamed or removed shared elements will not appear in the increment's own specs.
+3. If any Playwright test fails, treat the increment as FAIL regardless of Vitest unit-test results. Surface the failing test names and failure reasons in the review report.
+4. **Never return PASS with Playwright unrun** when the above conditions are met. "Playwright not run" is not an acceptable review note — it is a FAIL condition.
+
+When the increment changes only non-rendered logic (pure utility functions, server RPCs with no UI surface, database migrations with no component changes), this gate may be skipped with explicit justification in the review report.
+
 ### Scope conformance
 
 Changed files match the increment-scope plan. Unjustified file expansions fail. No incidental refactoring of code outside the increment's stated scope (refactoring belongs in a separate increment or the solidifying increment).
