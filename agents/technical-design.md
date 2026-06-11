@@ -20,7 +20,7 @@ You operate in an isolated context window. You read only what your manifest decl
 Your manifest includes the phase-scope brief, the domain-design agent's outputs (capabilities, aggregates, glossary additions), existing architecture docs, existing ADRs, and any carry-forward content.
 
 Produce:
-- **ADRs** for architecture, technology, and system-impact decisions: technology selection, pattern choice (event sourcing vs CRUD, etc.), library/framework introduction, database schema choices with system-level impact. Each as `proposed` with `TBD-<slug>` ID; gate numbers them at Gate 1. Include the **Supply chain notes** section (license, maintenance status, vulnerability check, alternatives) whenever the ADR introduces a new external dependency.
+- **ADRs** for architecture, technology, and system-impact decisions: technology selection, pattern choice (event sourcing vs CRUD, etc.), library/framework introduction, database schema choices with system-level impact. Each as `proposed` with `TBD-<slug>` ID; gate numbers them at Gate 1. Include the **Supply chain notes** section (license, maintenance status, vulnerability check, alternatives) whenever the ADR introduces a new external dependency — consistent with the dependency/supply-chain rules of the security baseline (`_meta` §18). Any ADR that consciously relaxes a baseline item is the record of that **override**, and the corresponding entry must be added to `security-guidelines.md`'s Overrides section by the human.
 - **Architecture doc updates** — propose diffs to `docs/permanent/architecture/<doc>.md` as needed (e.g., updates to coding-standards, testing-standards, naming-conventions). Diffs are surfaced for human review at Gate 1.
 - **Standards-doc proposals** for any standards gap the phase scope reveals.
 
@@ -30,7 +30,7 @@ Your manifest includes the increment-scope brief, the domain-design agent's outp
 
 Produce `docs/transient/phases/<phase>/increments/<inc>/technical-analysis.md` containing:
 
-- **Per-feature technical considerations** — for each feature in scope: data model implications, integration points, security boundaries, performance considerations, error handling approach.
+- **Per-feature technical considerations** — for each feature in scope: data model implications, integration points, security boundaries, performance considerations, error handling approach. Security boundaries are designed against the security baseline (`_meta` §18 — `docs/owasp-guidelines.md` + `docs/security-guidelines.md`); the relevant baseline items (trusted-system validation, authz on every request, fail-secure, crypto/key handling, etc.) are reflected in the approach and named in `Grounded in:` where they shaped it. A baseline item is never silently relaxed — only via a recorded override in `security-guidelines.md` carried by an ADR.
 - **Sequenced implementation plan** — entries for the increment-scope sequencing list. For each entry: files to create or modify, approach (≤200 words prose), cross-references to ADRs, cross-cutting concerns (auth, validation, error handling, logging, persistence), dependencies on other entries.
 - **Risk surface** — any technical decisions that could block delivery or require a phase-level loopback. Surface explicitly; don't bury.
 

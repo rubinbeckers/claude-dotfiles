@@ -1,4 +1,4 @@
-# Documentation structure (v1.2)
+# Documentation structure (v1.3)
 
 How the project's documentation is organized, where each kind of doc lives, and how it moves through its lifecycle.
 
@@ -13,6 +13,8 @@ Everything the workflow manages lives under `docs/`. The project root holds proj
     workflow.md                    # canonical workflow contract (v1.1)
     agentic-sdlc-principles.md     # why the contract is shaped this way
     doc-structure.md               # this file
+    owasp-guidelines.md            # verbatim OWASP secure-coding baseline (not project-edited; always-allowed; security baseline per _meta §18)
+    security-guidelines.md         # project's custom security layer + baseline overrides (human-owned; always-allowed)
     skill-versions.lock            # pin to the dotfiles tag
     permanent/                     # spec-bearing artifacts; status field is ground truth
       domain/
@@ -154,13 +156,14 @@ Anything semantic — status, IDs, supersession links, accepted decision values,
 
 Per `_meta` §1, every agent and skill may always read certain docs without listing them in a manifest:
 - `docs/workflow.md`, `docs/agentic-sdlc-principles.md`, `docs/doc-structure.md`
+- `docs/owasp-guidelines.md` and `docs/security-guidelines.md` (the security baseline — `_meta` §18)
 - The agent's or skill's own definition file plus `_meta`
 - `docs/permanent/architecture/coding-standards.md`, `testing-standards.md`, `naming-conventions.md`
 - `docs/permanent/domain/glossary.md`
 - `docs/permanent/domain/domain-model.md`
 - `docs/permanent/design/design.md` and `docs/permanent/design/design-deviations.md`
 
-These are the project's universal context. Everything else is by manifest. `domain-model.md` is in the set because cross-context invariants must be respected by every spec-bearing artifact; an agent that doesn't read it can silently violate an invariant. `design.md` is in the set for the same reason on the UI side — it is the source of truth for components and tokens, so any agent producing or validating a UI-bearing artifact must read it (`_meta` §17). It is **human-owned**: always-allowed for reading, never written by an agent.
+These are the project's universal context. Everything else is by manifest. `domain-model.md` is in the set because cross-context invariants must be respected by every spec-bearing artifact; an agent that doesn't read it can silently violate an invariant. `design.md` is in the set for the same reason on the UI side — it is the source of truth for components and tokens, so any agent producing or validating a UI-bearing artifact must read it (`_meta` §17). It is **human-owned**: always-allowed for reading, never written by an agent. The two security-baseline docs are in the set on the security side, for the same reason and with the same discipline: `owasp-guidelines.md` is a verbatim, non-edited OWASP copy, and `security-guidelines.md` is the project's human-owned custom layer; every agent reads and works against both at every step (`_meta` §18).
 
 ## 10. Tag vocabulary
 

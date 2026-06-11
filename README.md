@@ -1,6 +1,8 @@
-# claude-dotfiles — agentic-SDLC workflow v1.2
+# claude-dotfiles — agentic-SDLC workflow v1.3
 
-Personal dotfiles hosting the skills, subagents, and templates that drive the **agentic-SDLC workflow v1.2** in Claude Code.
+Personal dotfiles hosting the skills, subagents, and templates that drive the **agentic-SDLC workflow v1.3** in Claude Code.
+
+v1.3 is a minor, additive update over v1.2: it adds the **security baseline guardrail**. Two project-level docs become permanent, always-allowed references that every skill and agent reads and works against at every step: `docs/owasp-guidelines.md` (a verbatim copy of the OWASP Secure Coding Practices Quick Reference Guide — a vendored upstream standard, not project-edited) and `docs/security-guidelines.md` (the project's own custom security layer plus a baseline-overrides table, human-owned, shipped as an empty scaffold). The baseline is mandatory, not optional: the design agents derive security requirements and abuse cases from it, `increment-develop` implements against it, `increment-test` derives abuse-case tests from it, and `increment-review` runs a mandatory security pass where an un-overridden violation blocks the increment. A baseline item is relaxed only by a recorded, ADR-backed override. This is the security analogue of the v1.2 design-system guardrail. No lifecycle, gate, or schema change. See `migration-v1.2-to-v1.3.md`.
 
 v1.2 is a minor, additive update over v1.1: it adds the **design-system guardrail**. A project-level `docs/permanent/design/design.md` (the design system — design tokens + component inventory) becomes a permanent, always-allowed, human-owned source of truth for UI. When UI work needs a component or token with no match in `design.md`, the gap is surfaced to the human (at Gate 2, with an execute-time backstop) for disposition — supply an updated `design.md`, or design the component from guidelines and class it as phase debt or accepted debt — and every divergence is logged in `design-deviations.md`. The fix-vs-accept choice reuses the existing solidifying-increment and accepted-debt machinery. No lifecycle, gate, or schema change. See `migration-v1.1-to-v1.2.md`.
 
@@ -36,6 +38,8 @@ v1.1 was a leanness pass over v1.0: the develop / test / review loop runs once p
 │   ├── workflow.md              project-level workflow contract (project-init writes to root)
 │   ├── agentic-sdlc-principles.md  (project-init writes to root)
 │   ├── doc-structure.md         (project-init writes to root)
+│   ├── owasp-guidelines.md      (verbatim OWASP secure-coding baseline; project-init writes to root; always-allowed; not project-edited)
+│   ├── security-guidelines.md   (project's custom security layer + baseline overrides; project-init writes empty scaffold to root; human-owned; always-allowed)
 │   ├── capability.md
 │   ├── aggregate.md
 │   ├── feature.md
@@ -98,7 +102,7 @@ v1.1 was a leanness pass over v1.0: the develop / test / review loop runs once p
 
    Symlinks point at the live files in this repo. `git pull` propagates without re-running the installer. Re-run when skills or agents are added / removed / renamed.
 
-3. **Verify access.** When you run `session-resume` in a project, the orchestrator validates `skill-versions.lock` against the dotfiles tag (default: `workflow-v1.2`).
+3. **Verify access.** When you run `session-resume` in a project, the orchestrator validates `skill-versions.lock` against the dotfiles tag (default: `workflow-v1.3`).
 
 ### Starting a new project
 
@@ -124,7 +128,7 @@ Any subsequent session, anywhere in the lifecycle: type *"resume"* or *"continue
 | `develop`                           | Integration; receives increment PRs.                                                                     |
 | `inc-<NNN>-<slug>`                  | Increment branch; cut from develop at increment-design, merged at increment-close.                       |
 | `fix/<inc-slug>/<short>`            | Post-merge fix branch; cut from develop, merged before the increment advances to `closed`.               |
-| tag `workflow-v1.2`                 | Stable pin target. `docs/skill-versions.lock` in projects references this tag.                           |
+| tag `workflow-v1.3`                 | Stable pin target. `docs/skill-versions.lock` in projects references this tag.                           |
 
 ## Migrating from v1.0
 
@@ -143,11 +147,16 @@ A migration helper isn't currently part of the workflow; the steps above are man
 
 v1.2 is additive. At a phase boundary, drop `design.md` (your design system, or the placeholder) and an empty `design-deviations.md` into `docs/permanent/design/`, switch the pin to `workflow-v1.2`, override the pin check (record a DR), and continue. No data migration. Full steps: `migration-v1.1-to-v1.2.md`.
 
+## Migrating from v1.2
+
+v1.3 is additive. At a phase boundary, drop `owasp-guidelines.md` (verbatim, from `templates/`) and a populated-or-scaffold `security-guidelines.md` into `docs/`, switch the pin to `workflow-v1.3`, override the pin check (record a DR), and continue. No data migration; the baseline applies to changed surfaces from the next increment forward. Full steps: `migration-v1.2-to-v1.3.md`.
+
 ## References
 
-- The v1.2 workflow contract: `docs/workflow.md` (at any v1.2-using project)
-- The principles this workflow instantiates: `docs/agentic-sdlc-principles.md`
+- The v1.3 workflow contract: `docs/workflow.md` (at any v1.3-using project; incl. §17 security baseline)
+- The principles this workflow instantiates: `docs/agentic-sdlc-principles.md` (incl. §11 security is a baseline)
 - Documentation layout: `docs/doc-structure.md`
-- Cross-cutting skill rules (incl. §17 design-system guardrail): `skills/_meta/SKILL.md` (in the dotfiles)
+- Cross-cutting skill rules (incl. §17 design-system guardrail and §18 security baseline): `skills/_meta/SKILL.md` (in the dotfiles)
+- The security baseline (source of truth for security): `docs/owasp-guidelines.md` (verbatim OWASP, not project-edited) + `docs/security-guidelines.md` (project's custom layer; human-owned). Mandatory reading for every skill and agent.
 - The design system (source of truth for UI): `docs/permanent/design/design.md`
 - Migration from v1.1: `migration-v1.1-to-v1.2.md`; from v1.0: `migration-v1.0-to-v1.1.md` (in the dotfiles)

@@ -70,14 +70,16 @@ A failure here blocks the increment, same as any other scope-internal check.
 
 ### Security
 
-Per `workflow.md` §11 security additions:
-- No secrets in committed code (scanner-style check + visual scan)
-- Input validation at trust boundaries
-- Auth/authz enforced on new endpoints where applicable
-- No PII, tokens, or secrets in logs
-- Error messages don't leak sensitive information
+Run an explicit, **mandatory** security pass against the security baseline — `docs/owasp-guidelines.md` (verbatim OWASP) and `docs/security-guidelines.md` (project layer) — per `_meta` §18 and the contract summary in `workflow.md` §17. Verdict against every baseline item applicable to the increment's surface (input handling, output encoding, auth/authz, session management, access control, cryptography, error handling and logging, data protection, communication security, file management, database security). At minimum:
 
-A failure here blocks the increment regardless of other passes.
+- No secrets in committed code (scanner-style check + visual scan); credentials/connection strings not hard-coded
+- Input validation at trust boundaries; output contextually encoded; parameterized queries for any DB access
+- Auth/authz enforced on new endpoints/resources where applicable; access controls fail securely
+- No PII, tokens, secrets, or session identifiers in logs; security events logged per the baseline
+- Error messages don't leak sensitive information; error handling denies access by default
+- Any project-specific rule in `security-guidelines.md` that applies to the changed surface
+
+A baseline item is satisfied, justifiably N/A, or covered by a **recorded override** in `security-guidelines.md`'s Overrides section (named item + rationale + approving ADR). A violation with no recorded override — or an undocumented relaxation of a baseline item — **blocks the increment regardless of other passes.** An agent never treats a baseline item as optional.
 
 ### Dependency-trace
 

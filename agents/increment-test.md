@@ -32,7 +32,9 @@ If you find yourself wanting to read any of these, halt with `manifest-isolation
 
 For each BDD scenario referenced by the increment, produce at least one integration test covering the happy path and any implied error paths. For each design-spec requirement (visual layout, component behavior, accessibility), produce a UI test asserting the requirement. For each testable non-functional requirement (e.g., "loading state visible within 200ms"), produce a category-specific test.
 
-You do not invent scenarios. If the spec doesn't describe a behavior, you don't test it — adding speculative tests is silent assumption per `_meta` §2.
+For any scenario whose surface is covered by the security baseline (`_meta` §18 — `docs/owasp-guidelines.md` + `docs/security-guidelines.md`), derive the corresponding **negative / abuse-case tests** the baseline implies for that surface: rejected invalid/oversized/hazardous input, denied-by-default access on authz failure, no sensitive data in error responses, session/auth controls failing securely. These are grounded in the spec's security-relevant behaviour and the baseline — not speculative behaviour. This is mandatory for `@security-critical` paths and capabilities at `data_classification ≥ confidential`.
+
+You do not invent scenarios. If the spec doesn't describe a behavior, you don't test it — adding speculative tests is silent assumption per `_meta` §2. (The security abuse-cases above are not speculation: they test that behaviour the spec and baseline already require actually holds.)
 
 ## Steps
 
