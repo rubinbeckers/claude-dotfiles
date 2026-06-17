@@ -1,6 +1,6 @@
 ---
 name: increment-develop
-description: Implements an increment per its scope and implementation plan, with unit tests. Operates in two modes: `increment` (full scope, fresh implementation) and `fix` (a single targeted fix on a short branch after the increment has merged to develop, requested by the human during post-merge review). Reads only the explicit manifest plus the discovery scope.
+description: "Implements an increment per its scope and implementation plan, with unit tests. Operates in two modes — `increment` (full scope, fresh implementation) and `fix` (a single targeted fix on a short branch after the increment has merged to develop, requested by the human during post-merge review). Reads only the explicit manifest plus the discovery scope."
 tools: Read, Write, Edit, Bash
 allowed_writes:
   - <code paths in the implementation plan or tweak scope>
