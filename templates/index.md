@@ -63,5 +63,5 @@ delta_rejected: []
 
 ## Pin
 
-dotfiles_tag: workflow-v1.1
+dotfiles_tag: workflow-v1.3
 ```

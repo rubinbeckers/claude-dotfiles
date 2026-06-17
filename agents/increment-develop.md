@@ -34,14 +34,16 @@ Per `_meta` §5: you may read type and interface declaration files within the sa
 3. Implement, file by file. Adherence:
    - Coding standards in every choice; deviations get a justifying comment and a routine observation.
    - Naming conventions for every new identifier.
-   - No secrets in code; env vars only.
-   - Input validation at trust boundaries.
-   - No logging of PII, tokens, or sensitive data.
+   - **The security baseline (`_meta` §18): `docs/owasp-guidelines.md` (verbatim OWASP) + `docs/security-guidelines.md` (project layer), mandatory, not optional.** It subsumes the specific rules below; honour every baseline item applicable to the code you touch. If the baseline mandates a pattern that `coding-standards.md` doesn't cover, follow the baseline and surface a routine observation that coding-standards should absorb it. Never silently relax a baseline item; an item is relaxed only by a recorded override in `security-guidelines.md`.
+   - No secrets in code; env vars only. Credentials/connection strings never hard-coded.
+   - Input validation at trust boundaries; contextual output encoding; parameterized queries for DB access.
+   - No logging of PII, tokens, secrets, or session identifiers; error handling fails secure and doesn't leak sensitive detail.
    - Structured logging per coding-standards.
 4. Write unit tests covering new logic. Target: ≥80% line coverage on new code by default; 100% line + branch on `@security-critical` paths or capabilities at `data_classification ≥ confidential`. Tests assert behavior, not implementation details.
 5. Run unit tests. All passing on new code. For tests failing outside your changes: do not investigate yourself. Report the failures to the orchestrator with `needs_classification: true`; the orchestrator runs the parent-commit check.
 6. For ADRs the implementation exercised: record the status transition in your return (`proposed → accepted-pending-review`, or `proposed → withdrawn` with rationale if the decision wasn't actually needed).
-7. Return the structured fenced block per `_meta` §4.
+7. **Mandatory formatting gate (final step before returning):** Run `npm run lint -- --fix` (or `npx prettier --write .` if the project's lint command doesn't support `--fix`) on all authored and modified files. Re-stage any files changed by the formatter. Do not return until `npm run lint` passes with zero Prettier violations. If violations remain after the write pass, resolve them manually before returning.
+8. Return the structured fenced block per `_meta` §4.
 
 ### Edges (mode: increment)
 
@@ -72,7 +74,8 @@ You do not expand scope. If the fix would require adding new scenarios, touching
    - If your change broke them and the tests are correct, fix the change.
    - If the tests are wrong relative to the new desired behaviour, halt with `scope-expansion` — this is not a fix, it's a spec change.
 5. If CI logs are in your manifest (after a prior CI failure), read them and apply the fix targeted to the CI failure.
-6. Return the structured fenced block.
+6. **Mandatory formatting gate (final step before returning):** Run `npm run lint -- --fix` (or `npx prettier --write .` if the project's lint command doesn't support `--fix`) on all authored and modified files. Re-stage any files changed by the formatter. Do not return until `npm run lint` passes with zero Prettier violations. If violations remain after the write pass, resolve them manually before returning.
+7. Return the structured fenced block.
 
 ### Edges (mode: fix)
 

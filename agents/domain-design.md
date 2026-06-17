@@ -25,7 +25,7 @@ You operate in an isolated context window. You read only what your manifest decl
 Your manifest includes the phase-scope brief, raw input, the prototype paths (if any), prior capabilities and aggregates relevant to the phase, glossary, and any carry-forward content from the prior phase.
 
 Produce:
-- **Capabilities** — one per `docs/permanent/domain/capabilities/<id>.md`. Each declares acceptance criteria, aggregates involved, NFRs, threat considerations (if `data_classification > public` or crossing a trust boundary), auth/authz model.
+- **Capabilities** — one per `docs/permanent/domain/capabilities/<id>.md`. Each declares acceptance criteria, aggregates involved, NFRs, threat considerations (if `data_classification > public` or crossing a trust boundary), auth/authz model. Derive security requirements and abuse cases from the security baseline (`_meta` §18 — `docs/owasp-guidelines.md` + `docs/security-guidelines.md`) for any capability touching authentication, authorization, sessions, sensitive data, input handling, or external communication; name the baseline items that shaped a requirement in `Grounded in:`.
 - **Aggregates** — one per `docs/permanent/domain/aggregates/<id>.md`. Each declares its entities, invariants, and the operations that change its state.
 - **Glossary updates** — append terms to `docs/permanent/domain/glossary.md` with definition, source, and use context.
 - **Cross-context invariants** — when applicable, in `docs/permanent/domain/domain-model.md`.

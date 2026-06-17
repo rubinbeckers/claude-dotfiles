@@ -18,6 +18,7 @@ The only skill exempt from the always-allowed-set precondition (`_meta` §1), be
 Everything lands under `docs/`. The project root holds project code, not workflow artifacts.
 
 - `docs/workflow.md`, `docs/agentic-sdlc-principles.md`, `docs/doc-structure.md`
+- `docs/owasp-guidelines.md` (verbatim OWASP baseline, from `templates/owasp-guidelines.md`) and `docs/security-guidelines.md` (empty project security scaffold, from `templates/security-guidelines.md`) — the security baseline (`_meta` §18); always-allowed reads, so they must resolve on day one
 - `docs/INDEX.md` with project slug, branch config, and an empty phase array
 - `docs/skill-versions.lock` pinned to the dotfiles tag
 - `docs/permanent/` skeleton per `doc-structure.md` (capabilities, aggregates, features, design-specs, flows, architecture, decision-records/DR, decision-records/ADR, domain, design/prototype, design/archive)
@@ -42,7 +43,9 @@ Ask the human for:
 
 ### 3. Write the workflow contract docs
 
-Create `docs/` if it doesn't exist. Copy `workflow.md`, `agentic-sdlc-principles.md`, `doc-structure.md` from the dotfiles `templates/` directory to `docs/`. The contract lives with the project so future humans (or agents) opening the project find it alongside the work.
+Create `docs/` if it doesn't exist. Copy `workflow.md`, `agentic-sdlc-principles.md`, `doc-structure.md`, `owasp-guidelines.md`, and `security-guidelines.md` from the dotfiles `templates/` directory to `docs/`. The contract lives with the project so future humans (or agents) opening the project find it alongside the work.
+
+`owasp-guidelines.md` is the verbatim OWASP baseline — copy it unchanged; it is not project-edited. `security-guidelines.md` ships as an **empty scaffold** (human-owned, like the placeholder `design.md`): the human populates it with project-specific security rules and any baseline overrides before the first phase touches security-relevant code. Both are always-allowed reads (`_meta` §1, §18), so they must exist on day one for the read set to resolve.
 
 ### 4. Write the doc skeleton
 
@@ -64,7 +67,7 @@ Write `docs/skill-versions.lock` referencing the dotfiles tag the project will p
 
 ### 7. Initial git commit
 
-If the project is in a fresh git repo, commit the scaffold with a message like `chore: project-init v1.2 scaffold`. If the project already has commits, do not commit automatically — surface the staged changes to the human for review.
+If the project is in a fresh git repo, commit the scaffold with a message like `chore: project-init v1.3 scaffold`. If the project already has commits, do not commit automatically — surface the staged changes to the human for review.
 
 ### 8. Advance
 
@@ -74,6 +77,7 @@ If the human provided raw input in step 2 and pointed at its location, invoke `p
 project-init complete.
 Workflow files scaffolded under docs/.
 Before UI work: replace the placeholder docs/permanent/design/design.md with your project's design system.
+Before security-relevant work: populate docs/security-guidelines.md (the OWASP baseline in docs/owasp-guidelines.md applies as-is from day one).
 Provide raw input for phase 1 at docs/transient/phases/01-<slug>/raw-input/, then run session-resume (or "resume").
 ```
 

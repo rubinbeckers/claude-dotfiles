@@ -1,4 +1,4 @@
-# Agentic SDLC principles (v1.1)
+# Agentic SDLC principles (v1.3)
 
 The why behind the workflow. These are workflow-agnostic; if the workflow's rules ever seem arbitrary, this document is the appeal court.
 
@@ -54,3 +54,9 @@ Each layer catches a different failure class. The layered structure is the redun
 ## 10. The workflow is not the work
 
 The workflow exists to make the work happen well. If the workflow gets in the way of the work, the workflow is wrong. Surface that as a workflow-defect observation; phase-close synthesizes them into proposals; improvement is real.
+
+## 11. Security is a baseline, not a feature
+
+Security flaws can enter at any stage — missing requirements, a logic error in design, a poor coding choice, a careless deployment. So security isn't a checkbox at the end; it is a baseline that every step works against. The workflow carries that baseline as two always-allowed documents: a verbatim OWASP Secure Coding Practices copy (the technology-agnostic industry standard) and a project-owned custom layer for what OWASP doesn't cover. They are mandatory reading for every agent, the same way the design system is mandatory for UI work — and for the same reason: a single, human-owned source of truth that agents read and conform to, never silently reinterpret.
+
+This mirrors the design-system guardrail. The design system is the source of truth for *how the product looks and behaves*; the security baseline is the source of truth for *how the product stays safe*. Both outrank an agent's own judgment, both surface gaps to the human rather than improvising, and both make conformance checkable at the gates rather than hoped-for. A baseline item is relaxed only by a recorded, ADR-backed override — never by an agent deciding a rule doesn't apply. The attacker operates on "any action not specifically denied is allowed"; the workflow answers by making the denials explicit, shared, and enforced.

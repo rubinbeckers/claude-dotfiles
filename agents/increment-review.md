@@ -47,6 +47,17 @@ Smoke tagging: tests covering capability `data_classification ≥ confidential`,
 
 Flaky tests: new tests showing intermittent pass/fail block the increment. Existing tests rediscovered as flaky are logged to `phase-debt.md` but don't block.
 
+### Playwright gate (UI-touching increments)
+
+When the increment changes any rendered UI surface, route, shared component, or renames/removes any element that existing Playwright specs may target (tab labels, `data-testid` attributes, input names, ARIA labels, navigation items):
+
+1. Run `npm run build` to completion. If the build fails, treat as FAIL — do not proceed to test.
+2. Run `npm run test:ui` (or `npx playwright test`) for the FULL Playwright suite — not just the increment's own new specs. Cross-spec regressions from renamed or removed shared elements will not appear in the increment's own specs.
+3. If any Playwright test fails, treat the increment as FAIL regardless of Vitest unit-test results. Surface the failing test names and failure reasons in the review report.
+4. **Never return PASS with Playwright unrun** when the above conditions are met. "Playwright not run" is not an acceptable review note — it is a FAIL condition.
+
+When the increment changes only non-rendered logic (pure utility functions, server RPCs with no UI surface, database migrations with no component changes), this gate may be skipped with explicit justification in the review report.
+
 ### Scope conformance
 
 Changed files match the increment-scope plan. Unjustified file expansions fail. No incidental refactoring of code outside the increment's stated scope (refactoring belongs in a separate increment or the solidifying increment).
@@ -59,14 +70,16 @@ A failure here blocks the increment, same as any other scope-internal check.
 
 ### Security
 
-Per `workflow.md` §11 security additions:
-- No secrets in committed code (scanner-style check + visual scan)
-- Input validation at trust boundaries
-- Auth/authz enforced on new endpoints where applicable
-- No PII, tokens, or secrets in logs
-- Error messages don't leak sensitive information
+Run an explicit, **mandatory** security pass against the security baseline — `docs/owasp-guidelines.md` (verbatim OWASP) and `docs/security-guidelines.md` (project layer) — per `_meta` §18 and the contract summary in `workflow.md` §17. Verdict against every baseline item applicable to the increment's surface (input handling, output encoding, auth/authz, session management, access control, cryptography, error handling and logging, data protection, communication security, file management, database security). At minimum:
 
-A failure here blocks the increment regardless of other passes.
+- No secrets in committed code (scanner-style check + visual scan); credentials/connection strings not hard-coded
+- Input validation at trust boundaries; output contextually encoded; parameterized queries for any DB access
+- Auth/authz enforced on new endpoints/resources where applicable; access controls fail securely
+- No PII, tokens, secrets, or session identifiers in logs; security events logged per the baseline
+- Error messages don't leak sensitive information; error handling denies access by default
+- Any project-specific rule in `security-guidelines.md` that applies to the changed surface
+
+A baseline item is satisfied, justifiably N/A, or covered by a **recorded override** in `security-guidelines.md`'s Overrides section (named item + rationale + approving ADR). A violation with no recorded override — or an undocumented relaxation of a baseline item — **blocks the increment regardless of other passes.** An agent never treats a baseline item as optional.
 
 ### Dependency-trace
 

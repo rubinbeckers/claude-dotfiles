@@ -12,6 +12,7 @@ The contract every skill and agent operates under. If a skill's text contradicts
 Every skill and agent may always read, without listing them in its manifest:
 
 - `docs/workflow.md`, `docs/agentic-sdlc-principles.md`, `docs/doc-structure.md`
+- `docs/owasp-guidelines.md` (the verbatim OWASP Secure Coding Practices baseline) and `docs/security-guidelines.md` (the project's custom security layer) — the mandatory security baseline; every skill and agent reads and works against both, per §18
 - `.claude/skills/_meta/SKILL.md` and the skill's or agent's own definition file
 - `docs/permanent/architecture/coding-standards.md`, `testing-standards.md`, `naming-conventions.md`
 - `docs/permanent/domain/glossary.md`
@@ -244,3 +245,25 @@ Reply: "A" (then supply the file) | "B-phase" | "B-accept" | "accept-gap"
 ```
 
 The orchestrator parses the reply, records the deviation (and any debt entry), and re-invokes the agent with the resolution. A B-path resolution that materially changes an accepted spec re-passes the relevant gate, as with any spec change.
+
+## 18. Security baseline (mandatory, every step)
+
+Two documents form the project's **security baseline**:
+
+- `docs/owasp-guidelines.md` — a *verbatim* copy of the OWASP Secure Coding Practices Quick Reference Guide. Treat it as a vendored upstream standard: it is **not edited** in-project. Refreshed only by re-importing a newer OWASP release.
+- `docs/security-guidelines.md` — the project's **own** security layer: rules OWASP doesn't cover, project-specific elaborations, and any conscious overrides. Human-owned, exactly like `design.md` (§17): agents read it and work against it, but **never write to it**.
+
+Both are always-allowed reads (§1). They are **not optional**. Every skill and every agent reads both and works against them at every step where it produces, modifies, or validates an artifact — analysis, design specs, code, tests, and reviews alike. This mirrors the design-system guardrail (§17): the design system is the source of truth for UI; the security baseline is the source of truth for security.
+
+**Precedence.** Where `security-guidelines.md` is silent, the OWASP baseline governs. Where it states a stricter rule, the stricter rule governs. A baseline item may be relaxed or replaced **only** by an explicit entry in the "Overrides" section of `security-guidelines.md` that names the overridden item, gives a rationale, and references an approving ADR. An agent never infers an override and never silently relaxes a baseline item (§2) — absent a recorded override, the baseline stands.
+
+**What "work against" means by role.**
+
+- **Design agents** (`domain-design`, `technical-design`): treat the baseline as a source of security requirements and abuse cases. Design specs and ADRs that touch authentication, authorization, sessions, data protection, cryptography, input handling, file handling, or external communication must reflect the applicable baseline items, and must declare them in `Grounded in:` where the item shaped the design. A new external dependency's ADR "Supply chain notes" reflects the dependency/supply-chain rules.
+- **`increment-develop`**: implement against the baseline (it subsumes the inline security rules already in the agent — secrets, input validation at trust boundaries, no sensitive data in logs, fail-secure error handling, parameterized queries, etc.). A required pattern absent from `coding-standards.md` but mandated by the baseline is followed from the baseline, with a routine observation that `coding-standards.md` should absorb it.
+- **`increment-test`**: derive security test cases from the baseline and from `security-guidelines.md` for the scenarios in scope (negative/abuse cases for validation, authz, session, error-leakage), consistent with manifest isolation.
+- **`increment-review`**: run an explicit, mandatory security pass against the baseline (see the review agent's Security check). A baseline violation with no recorded override **blocks the increment**, regardless of other passes.
+
+**Surfacing gaps.** An agent never edits either baseline file. When work reveals a needed project rule, a baseline item that doesn't fit the project, or a candidate override, the agent surfaces a `category: other` (or `standards-coding`) observation (§6) proposing the addition to `security-guidelines.md`; the human dispositions it. A genuine conflict between an instruction and the baseline is a halt (§2), not a silent resolution.
+
+Both files are part of the always-allowed-read set (§1), so if either is missing the read fails to resolve and the agent halts and surfaces the gap, exactly as for any other always-allowed doc. `project-init` scaffolds both on day one so this resolves from the start.

@@ -1,4 +1,4 @@
-# Workflow contract (v1.2)
+# Workflow contract (v1.3)
 
 This document is the canonical reference for what the workflow does, how phases and increments are structured, and what the gates mean. Skills implement this contract; if a skill's behavior diverges, the skill is wrong.
 
@@ -164,3 +164,17 @@ The workflow does not manage `main`. Promotion from develop to main is human-dri
 - UI-bearing work resolves every component and token against `design.md`. A direct match proceeds; an ambiguous or absent match is surfaced to the human via the design-decision prompt at Gate 2 (design time) or, as a backstop, during `increment-execute`.
 - For a missing **component**, the human either supplies an updated `design.md` or directs the agent to design it from `design.md`'s guidelines, choosing whether the result is **phase debt** (reconciled by the solidifying increment) or **accepted debt**. For a missing **foundation token**, the choice is human-only — agents never improvise tokens.
 - Every divergence from `design.md` is logged in `docs/permanent/design/design-deviations.md`. The fix-vs-accept disposition reuses the existing debt machinery: a `category: design-deviation` entry in `phase-debt.md` (drained by the solidifying increment per §9) or a record in `accepted-debt.md`. `doc-integrity` enforces that design-spec references resolve and that no design-deviation stays `pending` past the drain.
+
+## 17. Security baseline (the source of truth for security)
+
+Two always-allowed docs form the project's **security baseline** — the security analogue of the design system (§16):
+
+- `docs/owasp-guidelines.md` — a *verbatim* copy of the OWASP Secure Coding Practices Quick Reference Guide. A vendored upstream standard; **not project-edited**. Refreshed only by re-importing a newer OWASP release.
+- `docs/security-guidelines.md` — the project's **own** security layer: rules OWASP doesn't cover, project elaborations, and any conscious overrides. **Human-owned** — agents read it, never write it.
+
+The full rule is in `_meta` §18; the contract-level summary:
+
+- The baseline is **mandatory, not optional**. Every skill and agent reads both docs and works against them at every step where it produces, modifies, or validates an artifact — analysis, design specs, code, tests, review.
+- **Precedence:** where `security-guidelines.md` is silent, the OWASP baseline governs; where it is stricter, the stricter rule governs. A baseline item is relaxed **only** by an explicit entry in `security-guidelines.md`'s Overrides section that names the item, gives a rationale, and references an approving ADR. No recorded override → the baseline stands. Agents never infer or silently relax a baseline item (`_meta` §2).
+- **Enforcement at the gates:** design-time, security requirements and abuse cases derived from the baseline appear in capabilities/ADRs (Gate 1) and features/design-specs (Gate 2). `increment-review` runs a mandatory security pass against the baseline; an un-overridden violation is a FAIL that blocks the increment regardless of other passes (Gate 3 cannot be reached with the increment in FAIL).
+- An agent that finds a needed project rule or a candidate override surfaces it as an observation for human disposition into `security-guidelines.md`; it never edits either baseline file.
